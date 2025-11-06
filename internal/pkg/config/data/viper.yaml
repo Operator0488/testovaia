@@ -1,0 +1,15 @@
+test: "value"
+
+app:
+  port: "8080"
+  host: "localhost"
+
+brokers:
+  - "kafka:9092"
+  - "kafka:9093"
+
+s3:
+ auth:
+  user: "user"
+  pass: "pass"
+ addr: "localhost:9092"

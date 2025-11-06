@@ -1,0 +1,29 @@
+[
+    {
+        "Key": "shared/kafka/brokers",
+        "CreateIndex": 3285,
+        "ModifyIndex": 3285,
+        "LockIndex": 0,
+        "Flags": 0,
+        "Value": "bG9jYWxob3N0OjkwOTIsbG9jYWxob3N0OjkwOTM=",
+        "Session": ""
+    },
+    {
+        "Key": "shared/s3/host",
+        "CreateIndex": 3280,
+        "ModifyIndex": 3280,
+        "LockIndex": 0,
+        "Flags": 0,
+        "Value": "bG9jYWxob3N0",
+        "Session": ""
+    },
+    {
+        "Key": "shared/s3/port",
+        "CreateIndex": 3281,
+        "ModifyIndex": 3281,
+        "LockIndex": 0,
+        "Flags": 0,
+        "Value": "OTA5Mg==",
+        "Session": ""
+    }
+]
