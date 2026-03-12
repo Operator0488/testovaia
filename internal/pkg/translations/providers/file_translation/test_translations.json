@@ -1,0 +1,12 @@
+{
+    "Backend.ServiceApp.Submit.Error": {
+        "en": "Failed to submit",
+        "fr": "Échec de la soumission",
+        "de": "Übermittlung fehlgeschlagen"
+    },
+    "Backend.ServiceApp.Submit.Success": {
+        "en": "Successfully submitted",
+        "fr": "Soumis avec succès",
+        "de": "Erfolgreich übermittelt"
+    }
+}

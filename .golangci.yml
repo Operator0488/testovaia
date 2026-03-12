@@ -1,0 +1,20 @@
+version: "2"
+
+linters:
+  default: all
+  enable:
+    - govet
+    - staticcheck
+  disable:
+    - godot
+    - wsl_v5
+    - wsl
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  formats:
+     text: 
+      print-linter-name: false

@@ -1,0 +1,13 @@
+app:
+  port: "8080"
+  host: "localhost"
+
+kafka:
+  partition: 5
+  brokers:
+    - "kafka:9092"
+    - "kafka:9093"
+
+service:
+  rate_limit: 100
+  duration_min: 60
