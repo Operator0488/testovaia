@@ -21,6 +21,7 @@ func NewWorkflowBuilder(serviceName, host, user, password string) WorkflowBuilde
 		host:           host,
 		credentialUser: user,
 		credentialPwd:  password,
+		handlers:       make(map[string]handlerDescriptor),
 	}
 }
 

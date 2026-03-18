@@ -143,7 +143,7 @@ func (svc *workflowBuilder) runWorkflow(workflow *workflowService) {
 	workflow.ReadyToWork()
 	logger.Info(ctx, "Workflow client is ready to work")
 
-	if len(svc.handlers) == 0 {
+	if len(svc.handlers) > 0 {
 		logger.Info(ctx, "Make task subscriber workers")
 		for taskName, taskHandler := range svc.handlers {
 			select {
