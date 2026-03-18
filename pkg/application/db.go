@@ -16,7 +16,7 @@ var (
 // WithDB добавляет компонент базы данных в сервис (Postgres)
 func WithDB() Option {
 	return func(app *Application) error {
-		app.components.addFirst(component(dbComponent))
+		app.components.add(component(dbComponent))
 		return nil
 	}
 }
