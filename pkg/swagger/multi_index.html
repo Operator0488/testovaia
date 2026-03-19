@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>Swagger UI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css">
+    <style>body { margin:0; } #swagger { width: 100%; }</style>
+</head>
+<body>
+<div id="swagger"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
+<script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js"></script>
+<script>
+    window.onload = () => {
+        SwaggerUIBundle({
+            urls: __SWAGGER_URLS__,
+            "urls.primaryName": __SWAGGER_URLS__[0].name,
+            dom_id: "#swagger",
+            deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
+            plugins: [
+                SwaggerUIBundle.plugins.DownloadUrl
+            ],
+            layout: "StandaloneLayout"
+        });
+    };
+</script>
+</body>
+</html>

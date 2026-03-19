@@ -2,13 +2,15 @@ package application
 
 import (
 	"context"
-	grpcserver "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	grpcserver "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/workflow"
 
@@ -69,7 +71,10 @@ type Application struct {
 	PublicGrpcServer  *grpcserver.Manager
 	GrpcClients       *grpcclient.Manager
 
-	swagger *swagger.Manager
+	// HTTP / OpenAPI
+	swagger    *swagger.Manager
+	apiFS      fs.FS
+	registerFn RegisterFn
 }
 
 func NewWithConfig(ctx context.Context, env config.Configurer, components ...Option) (*Application, error) {
@@ -119,13 +124,14 @@ func new(ctx context.Context, env config.Configurer, components ...Option) (*App
 		}
 	}
 
+	app.middlewares.Add(app.panicRecoveryMiddleware)
+	app.middlewares.Add(app.httpMetricsMiddleware)
+
 	// добавление k8s мидлваров
 	app.addProbes()
 
 	// подписка на изменения и регистрация в di
 	app.initConfig(ctx)
-
-	// TODO добавить мидлвари для отлов паники
 
 	logger.Info(ctx, "Application components initializing")
 	if err := app.components.init(ctx, app); err != nil {

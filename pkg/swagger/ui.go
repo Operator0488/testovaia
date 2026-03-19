@@ -5,10 +5,11 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"net/http"
 	"reflect"
 	"time"
+
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 )
 
 const swaggerPath = "/swagger"

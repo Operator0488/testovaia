@@ -2,14 +2,14 @@ package workflow
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"github.com/camunda/zeebe/clients/go/v8/pkg/zbc"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
+	"github.com/camunda/zeebe/clients/go/v8/pkg/zbc"
 )
 
-//
 // WorkflowBuilder Конфигуратор клиента workflow
 type WorkflowBuilder interface {
 	//
@@ -26,7 +26,6 @@ type WorkflowBuilder interface {
 	WithHandler(taskName string, handler WorkflowTaskHandler, config ...TaskHandlerConfig) WorkflowBuilder
 }
 
-//
 // TaskHandlerConfig Тонкий конфигуратор конкретного обработчика задач
 type TaskHandlerConfig struct {
 	// RetryTimeoutSec Таймаут перед повторной попыткой делегировать задачу в случае ошибки.
