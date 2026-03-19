@@ -3,17 +3,23 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
+	"time"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/vault"
 	"github.com/hashicorp/consul/api"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 const (
 	defaultVaultAddr          = "http://vault:8200"
 	defaultConsulAddr         = "consul:8500"
+	defaultEtcdEndpoints      = "etcd:2379"
+	defaultEtcdDialTimeout    = 5 * time.Second
 	defaultVaultMount         = "kv"
 	defaultConsulSharedPrefix = "shared"
 	defaultVaultSharedPrefix  = "shared"
+	defaultEtcdSharedPrefix   = "shared"
 )
 
 const (
@@ -27,11 +33,16 @@ const (
 	envConsulTokenPath = "CONSUL_TOKEN_PATH"
 	EnvConsulDisabled  = "CONSUL_DISABLED"
 
+	envEtcdEndpoints = "ETCD_ENDPOINTS"
+	EnvEtcdDisabled  = "ETCD_DISABLED"
+
 	EnvAppName            = "app.name"
 	envConsulAppPrefix    = "consul.app_prefix"
 	envConsulSharedPrefix = "consul.shared_prefix"
 	envVaultAppPath       = "vault.app_path"
 	envVaultSharedPath    = "vault.shared_path"
+	envEtcdAppPrefix      = "etcd.app_prefix"
+	envEtcdSharedPrefix   = "etcd.shared_prefix"
 )
 
 func getVaultMount() string {
@@ -80,5 +91,22 @@ func getConsulConfig() (*api.Config, error) {
 		Address:   addr,
 		Token:     token,
 		TokenFile: tokenFile,
+	}, nil
+}
+
+func getEtcdConfig() (*clientv3.Config, error) {
+	disabled, ok := os.LookupEnv(EnvEtcdDisabled)
+	if ok && disabled == "true" {
+		return nil, nil
+	}
+
+	endpoints, ok := os.LookupEnv(envEtcdEndpoints)
+	if !ok {
+		endpoints = defaultEtcdEndpoints
+	}
+
+	return &clientv3.Config{
+		Endpoints:   strings.Split(endpoints, ","),
+		DialTimeout: defaultEtcdDialTimeout,
 	}, nil
 }

@@ -9,8 +9,10 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config"
 	configprovider "easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config_provider"
 	consulprovider "easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config_provider/consul"
+	etcdprovider "easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config_provider/etcd"
 	vaultprovider "easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config_provider/vault"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/consul"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/etcd"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/vault"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 )
@@ -67,6 +69,26 @@ func Init(ctx context.Context, opts ...InitOption) error {
 			}
 		}
 
+		// apply etcd configs
+		etcdClient, err := getEtcdClient()
+		if err != nil {
+			logger.Fatal(ctx, "failed init config", logger.Err(err))
+		}
+
+		if etcdClient != nil {
+			sharedPrefix := cfg.GetStringOrDefault(envEtcdSharedPrefix, defaultEtcdSharedPrefix)
+			appPrefix := cfg.GetStringOrDefault(envEtcdAppPrefix, appName)
+			etcdShared := etcdprovider.NewProvider(etcdClient, sharedPrefix)
+			etcdApp := etcdprovider.NewProvider(etcdClient, appPrefix)
+
+			mustLoadProvider(ctx, cfg, etcdShared)
+			mustLoadProvider(ctx, cfg, etcdApp)
+
+			if err := cfg.Bootstrap(ctx, etcdApp); err != nil {
+				logger.Fatal(ctx, "failed bootstrap config", logger.Err(err))
+			}
+		}
+
 		// apply vault configs
 		vaultClient, err := getVaultClient()
 		if err != nil {
@@ -113,6 +135,19 @@ func getConsulClient() (consul.Client, error) {
 	client, err := consul.NewClientWithConfig(consulConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create consul client %w", err)
+	}
+	return client, nil
+}
+
+func getEtcdClient() (etcd.Client, error) {
+	etcdConfig, err := getEtcdConfig()
+	if err != nil || etcdConfig == nil {
+		return nil, err
+	}
+
+	client, err := etcd.NewClientWithConfig(*etcdConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create etcd client %w", err)
 	}
 	return client, nil
 }
