@@ -13,10 +13,10 @@
 
 Пакет application включает в себя несколько компонентов, отвечающих за управление разными аспектами жизненного цикла приложения:
 
+* WithOpenAPI - REST API из OpenAPI спецификаций (валидация, Swagger UI, генерация кода, автоматический запуск HTTP-сервера)
 * WithKafka - компонент для добавления клиента Kafka. После создания приложения клиент доступен по адресу `app.Kafka`
-* WithHTTP - компонент для запуска HTTP-сервера.
 * WithRedis - компонент для добавления клиента Redis. После создания приложения клиент доступен по адресу `app.Redis`
-* WithTrace - компонент для запуска трассировки.
+* WithTrace - компонент для запуска трассировки
 * WithS3 - компонент для добавления клиента S3. После создания приложения клиент доступен по адресу `app.S3`
 * WithWorkflow - компонент для подключения сервиса к оркестратору бизнес-процессов
 * WithDb - компонент для подключения к БД Postgres, доступен через интерфейс `db.DbClient`
@@ -24,7 +24,19 @@
 
 ### Middlewares
 
-На данный момент релизованы мидлвари для снятия k8s проб по HTTP-адресам, данные мидлвари автоматически применяются к поднятому http-серверу
+Все middleware применяются автоматически к HTTP-серверу в следующем порядке:
+
+1. **Panic Recovery** — перехватывает панику, возвращает JSON `{"error":"internal server error","correlation_id":"..."}` с HTTP 500. Детали паники логируются с correlation_id для поиска в логах.
+2. **HTTP Metrics** — Prometheus метрики: `http_requests_total`, `http_request_duration_seconds` с лейблами method/path/status_code.
+3. **Liveness** `/healthz/live` — возвращает 200 если httpServer жив.
+4. **Readiness** `/healthz/ready` — проверяет что приложение перешло в состояние `started`.
+
+При использовании `WithOpenAPI` дополнительно подключаются:
+
+5. **Swagger UI** — `/swagger/` отдает интерактивную документацию, `/swagger/{name}/openapi.json` — спецификацию. При нескольких спецификациях отображается выпадающий список для выбора.
+6. **Auth** — проверка аутентификации (по умолчанию заглушка с warn-логом).
+7. **Rate Limiter** — ограничение количества запросов (по умолчанию заглушка с warn-логом).
+8. **Validation** — автоматическая валидация запросов по всем OpenAPI-схемам (kin-openapi). При наличии нескольких спецификаций middleware последовательно ищет маршрут в каждой из них.
 
 ##### Пробы для `/healthz/live`
 Возвращает 200 если компонент httpServer жив
@@ -60,32 +72,209 @@
 
 ```
 
-### Примеры использования http-сервер
+### REST API (WithOpenAPI)
+
+Способ создания REST API сервиса. API описывается в одном или нескольких OpenAPI 3.x YAML файлах.
+Весь Go-код генерируется одной командой `make generate`, разработчик реализует только бизнес-логику.
+
+`WithOpenAPI` автоматически запускает HTTP-сервер.
+
+#### Быстрый старт: создание нового сервиса
+
+Разработчик создаёт только два файла, всё остальное генерируется автоматически.
+
+**Шаг 1.** Создайте спецификацию. Пример: `api/openapi/items.yaml`:
+
+```yaml
+openapi: "3.0.0"
+info:
+  title: Items API
+  version: "1.0.0"
+paths:
+  /items/{id}:
+    get:
+      operationId: getItemById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+```
+
+**Шаг 2.** Создайте `cmd/app/main.go`:
 
 ```go
-	ctx := context.Background()
-
-	app, err := application.New(
-		ctx,
-		application.WithHTTP(),
-	)
-	if err != nil {
-		logger.Fatal(ctx, "failed create app", logger.Err(err))
-		return
-	}
-
-	// роутинг для HTTP-сервера
-	e := echo.New()
-	e.GET("/test", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"test": "200"})
-	})
-
-	// регистрация кастомного роутеа
-	app.RegisterRouter(e)
-
-	// старт приложения
-	app.Run()
+func main() {
+    ctx := context.Background()
+    app, err := application.New(ctx,
+        application.WithOpenAPI(openapi.FS(), handler.Register),
+    )
+    if err != nil {
+        panic(err)
+    }
+    app.Run()
+}
 ```
+
+**Шаг 3.** Зафиксируйте зависимость в 'internal/tools/tools.go':
+```go
+//go:build tools
+
+package tools
+
+import (
+	_ "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
+)
+```
+
+**Шаг 4.** Добавьте `Makefile`:
+
+```makefile
+PLATFORM_PATH  = $(shell go list -m -f '{{.Dir}}' easybnk.gitlab.yandexcloud.net/backend/platform-core)
+SERVICE_ROOT   = $(shell pwd)
+
+.PHONY: generate generate-check
+
+generate:
+	bash $(PLATFORM_PATH)/scripts/openapi-generate.sh $(SERVICE_ROOT)/api/openapi $(SERVICE_ROOT)
+
+generate-check:
+	CHECK=1 bash $(PLATFORM_PATH)/scripts/openapi-generate.sh $(SERVICE_ROOT)/api/openapi $(SERVICE_ROOT)
+```
+
+**Шаг 5.** Запустите генерацию:
+
+```bash
+make generate
+```
+
+Скрипт создаёт всё необходимое:
+
+```
+myservice/
+├── api/
+│   └── openapi/
+│       ├── items.yaml                           # ВЫ СОЗДАЛИ
+│       └── embed.go                             # СГЕНЕРИРОВАНО: go:embed спецификаций
+├── cmd/app/
+│   └── main.go                                  # ВЫ СОЗДАЛИ
+├── internal/
+│   ├── api/items/
+│   │   └── api.gen.go                           # СГЕНЕРИРОВАНО: типы, интерфейсы, роутер
+│   └── handler/
+│       ├── register.go                          # СГЕНЕРИРОВАНО: агрегатор всех хэндлеров
+│       └── items/
+│           ├── handler.go                       # СГЕНЕРИРОВАНО: ItemsHandler с заглушками
+│           └── register.go                      # СГЕНЕРИРОВАНО: регистрация на mux
+└── Makefile
+```
+
+Имя структуры хэндлера (`ItemsHandler`) извлекается из `info.title` спецификации:
+- `"Items API"` → `ItemsHandler`
+- `"User Management API"` → `UserManagementHandler`
+
+**Шаг 6.** Реализуйте бизнес-логику — замените `panic("not implemented")` в `internal/handler/items/handler.go`:
+
+```go
+func (h *ItemsHandler) GetItemById(ctx context.Context, req gen.GetItemByIdRequestObject) (gen.GetItemByIdResponseObject, error) {
+    return gen.GetItemById200JSONResponse{Id: &req.Id, Name: ptr("Widget")}, nil
+}
+```
+
+#### Повторная генерация
+
+При повторном запуске `make generate`:
+- `api/embed.go` — перегенерируется всегда
+- `internal/api/*/api.gen.go` — перегенерируется всегда
+- `internal/handler/register.go` — перегенерируется всегда (агрегатор, подхватывает новые спецификации)
+- `internal/handler/*/handler.go` — **НЕ перезаписывается**, чтобы не потерять бизнес-логику
+- `internal/handler/*/register.go` — **НЕ перезаписывается**
+
+Если в спецификации появились новые операции, скрипт выведет предупреждение:
+```
+WARNING: handler.go is missing methods: DeleteItem
+Add them manually or delete the file and re-run the scaffold.
+```
+
+#### Несколько спецификаций
+
+Для нескольких доменов создайте отдельные YAML-файлы в `api/`:
+
+```
+api/openapi
+├── items.yaml     # Items API
+└── users.yaml     # Users API
+```
+
+`make generate` создаст отдельные пакеты для каждого:
+```
+internal/
+├── api/
+│   ├── items/api.gen.go
+│   └── users/api.gen.go
+└── handler/
+    ├── register.go          # автоматически вызывает items.Register + users.Register
+    ├── items/handler.go
+    └── users/handler.go
+```
+
+Swagger UI на `/swagger/` покажет выпадающий список для выбора спецификации.
+
+#### Кастомизация register.go
+
+Сгенерированный `register.go` внутри `internal/handler/{name}/` можно доработать:
+
+```go
+// internal/handler/items/register.go
+package items
+
+func Register(ctx context.Context, mux *http.ServeMux) {
+    db := di.Resolve[db.DbClient](ctx)
+    repo := repository.New(db)
+    h := &ItemsHandler{repo: repo}
+    gen.HandlerFromMux(gen.NewStrictHandler(h, nil), mux)
+}
+```
+
+При повторной генерации этот файл не будет перезаписан.
+
+#### Конфигурация генератора
+
+Конфигурация `oapi-codegen` хранится централизованно в platform-core (`pkg/openapi/codegen/cfg.yaml`).
+Сервисы не содержат собственных конфигурационных файлов генератора — это обеспечивает
+единообразие настроек генерации и исключает расхождения между сервисами.
+
+#### Проверка в CI/CD
+
+```bash
+make generate-check
+```
+
+Скрипт запускает генерацию и проверяет, что результат совпадает с коммитом.
+
+#### Автоматически доступно при запуске
+
+- REST-эндпоинты на порту приложения
+- Swagger UI на `/swagger/` (с выбором спецификации при наличии нескольких)
+- Валидация запросов по всем OpenAPI-схемам
+- Panic recovery, метрики, трассировка
 
 ### Примеры использования Kafka
 
@@ -310,15 +499,6 @@
 
 	// старт приложения
 	app.Run()
-```
-
-### Порядок запуска мидлвари
-
-```go
- // если есть recovery то его первым
-a.middlewares.Add(a.httpMetricsMiddleware)
-a.middlewares.Add(a.livenessMiddleware)
-a.middlewares.Add(a.readinessMiddleware)
 ```
 
 ### Пример регистрации в Healthcheck кастомных компонентов

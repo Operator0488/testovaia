@@ -14,16 +14,6 @@ var (
 	httpServer            = NewComponent("http", Noop, runHTTP)
 )
 
-// WithHTTP add httpServer component, started on HTTP_PORT.
-func WithHTTP() Option {
-	return func(app *Application) error {
-		if ok := app.components.add(component(httpServer)); !ok {
-			return ErrComponentAlreadyExist
-		}
-		return nil
-	}
-}
-
 // RegisterRouter add custom router: echo, gin, etc.
 func (a *Application) RegisterRouter(router http.Handler) {
 	a.router = router

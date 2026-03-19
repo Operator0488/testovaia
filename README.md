@@ -2,14 +2,17 @@
 
 Инфраструктурные и платформенные компоненты backend
 
+#### Application (base-app)
+[Документация и примеры использования](pkg/application/doc.md)
+
+#### REST API (OpenAPI)
+[Документация, генерация кода и пример спецификации](pkg/application/doc.md#rest-api-withopenapi)
+
 #### Структурный логгер
 [Документация и примеры использования](pkg/logger/doc.md)
 
 #### Работа с kafka
 [Документация и примеры использования](pkg/kafka/doc.md)
-
-#### Работа с base-app
-[Документация и примеры использования](pkg/application/doc.md)
 
 #### Работа с S3
 [Документация и примеры использования](pkg/s3client/doc.md)
