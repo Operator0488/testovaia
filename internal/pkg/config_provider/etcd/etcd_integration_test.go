@@ -127,17 +127,18 @@ func TestProvider_Watch_ReceivesChanges(t *testing.T) {
 
 	provider := NewProvider(client, "app")
 
-	// Get чтобы установить revision
-	_, err = provider.Get(ctx)
-	require.NoError(t, err)
-
 	ch := make(chan map[string]any, 10)
 	err = provider.Watch(ctx, func(data map[string]interface{}) {
 		ch <- data
 	})
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// initial snapshot (пустой)
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
 
 	// изменяем через raw client
 	rawClient, err := clientv3.New(cfg)

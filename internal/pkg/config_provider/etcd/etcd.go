@@ -10,17 +10,15 @@ import (
 )
 
 type etcdProvider struct {
-	client       etcd.Client
-	prefix       string
-	lastRevision int64
+	client etcd.Client
+	prefix string
 }
 
 func (e *etcdProvider) Get(ctx context.Context) (configprovider.ConfigData, error) {
-	pairs, rev, err := e.client.GetByPrefix(ctx, e.prefix)
+	pairs, _, err := e.client.GetByPrefix(ctx, e.prefix)
 	if err != nil {
 		return nil, err
 	}
-	e.lastRevision = rev
 	return convertToObject(e.prefix, pairs), nil
 }
 
@@ -53,7 +51,7 @@ func (e *etcdProvider) Set(ctx context.Context, value configprovider.ConfigData)
 }
 
 func (e *etcdProvider) Watch(ctx context.Context, onChange func(map[string]interface{})) error {
-	return e.client.WatchPrefix(ctx, e.prefix, e.lastRevision, func(pairs map[string]string) {
+	return e.client.WatchPrefix(ctx, e.prefix, func(pairs map[string]string) {
 		config := convertToObject(e.prefix, pairs)
 		onChange(config)
 	})
