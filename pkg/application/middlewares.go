@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/middleware"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/http/response"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
-	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
@@ -176,49 +176,24 @@ func (a *Application) httpMetricsMiddleware(next http.HandlerFunc) http.HandlerF
 
 // Panic Recovery
 
-type panicErrorResponse struct {
-	Error         string `json:"error"`
-	CorrelationID string `json:"correlation_id"`
-}
-
 func (a *Application) panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
 				ctx := r.Context()
 
-				correlationID := traceIDFromContext(ctx)
-				if correlationID == "" {
-					correlationID = uuid.New().String()
-				}
-
 				logger.Error(ctx, "panic recovered",
-					logger.String("correlation_id", correlationID),
 					logger.String("method", r.Method),
 					logger.String("path", r.URL.Path),
 					logger.String("panic", fmt.Sprintf("%v", rec)),
 					logger.String("stack", string(debug.Stack())),
 				)
 
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				_ = json.NewEncoder(w).Encode(panicErrorResponse{
-					Error:         "internal server error",
-					CorrelationID: correlationID,
-				})
+				response.WriteError(w, r, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		next(w, r)
 	}
-}
-
-func traceIDFromContext(ctx context.Context) string {
-	spanCtx := oteltrace.SpanFromContext(ctx).SpanContext()
-	if spanCtx.HasTraceID() {
-		return spanCtx.TraceID().String()
-	}
-
-	return ""
 }
 
 func isMetricPath(p string) bool {
@@ -291,7 +266,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if err := fn(r); err != nil {
-			WriteJSONError(w, r, http.StatusUnauthorized, "unauthorized")
+			response.WriteError(w, r, http.StatusUnauthorized, "unauthorized")
 
 			return
 		}
@@ -347,7 +322,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if err := fn(r); err != nil {
-			WriteJSONError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+			response.WriteError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 
 			return
 		}
@@ -379,8 +354,8 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if err := validateMultiRequest(ctx, r, routerList); err != nil {
-				WriteJSONError(w, r, http.StatusUnprocessableEntity,
-					"request validation failed", getReason(err))
+				response.WriteError(w, r, http.StatusUnprocessableEntity,
+					fmt.Sprintf("request validation failed: %s", getReason(err)))
 
 				return
 			}

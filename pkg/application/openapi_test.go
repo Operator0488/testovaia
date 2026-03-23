@@ -125,9 +125,14 @@ func TestWithOpenAPI_InvalidRequestRejectedByMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.False(t, handlerCalled, "handler must not be called when validation fails")
 
-	var resp map[string]interface{}
+	var resp struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "request validation failed", resp["message"])
+	require.NotNil(t, resp.Error)
+	assert.Contains(t, resp.Error.Message, "request validation failed")
 }
 
 func TestWithOpenAPI_DuplicateReturnsError(t *testing.T) {
