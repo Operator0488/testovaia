@@ -121,13 +121,17 @@ func TestWatchPrefix_PutEvent(t *testing.T) {
 	defer client.Close()
 
 	ch := make(chan map[string]string, 10)
-	err = client.WatchPrefix(ctx, "test/", 0, func(snapshot map[string]string) {
+	err = client.WatchPrefix(ctx, "test/", func(snapshot map[string]string) {
 		ch <- snapshot
 	})
 	require.NoError(t, err)
 
-	// дадим watch запуститься
-	time.Sleep(200 * time.Millisecond)
+	// initial snapshot (пустой, т.к. ключей ещё нет)
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
 
 	// изменяем через отдельный клиент (имитация внешних изменений)
 	rawClient, err := clientv3.New(cfg)
@@ -161,12 +165,18 @@ func TestWatchPrefix_DeleteEvent(t *testing.T) {
 	require.NoError(t, client.Put(ctx, "test/key1", "value1"))
 
 	ch := make(chan map[string]string, 10)
-	err = client.WatchPrefix(ctx, "test/", 0, func(snapshot map[string]string) {
+	err = client.WatchPrefix(ctx, "test/", func(snapshot map[string]string) {
 		ch <- snapshot
 	})
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// initial snapshot (содержит key1)
+	select {
+	case snapshot := <-ch:
+		assert.Equal(t, "value1", snapshot["test/key1"])
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
 
 	// удаляем через raw client
 	rawClient, err := clientv3.New(cfg)
@@ -198,12 +208,17 @@ func TestWatchPrefix_MultipleUpdates(t *testing.T) {
 	defer client.Close()
 
 	ch := make(chan map[string]string, 10)
-	err = client.WatchPrefix(ctx, "test/", 0, func(snapshot map[string]string) {
+	err = client.WatchPrefix(ctx, "test/", func(snapshot map[string]string) {
 		ch <- snapshot
 	})
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// initial snapshot
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
 
 	// изменяем через отдельный клиент (имитация внешних изменений)
 	rawClient, err := clientv3.New(cfg)
@@ -220,7 +235,7 @@ func TestWatchPrefix_MultipleUpdates(t *testing.T) {
 	_, err = rawClient.Put(ctx, "test/c", "4")
 	require.NoError(t, err)
 
-	// собираем все callbacks, последний должен содержать все 4 ключа
+	// собираем все callbacks, последний должен содержать все ключи
 	var lastSnapshot map[string]string
 	deadline := time.After(5 * time.Second)
 	collected := 0
@@ -230,7 +245,7 @@ func TestWatchPrefix_MultipleUpdates(t *testing.T) {
 			lastSnapshot = snapshot
 			collected++
 		case <-deadline:
-			t.Fatalf("timeout: got only %d callbacks, expected 3", collected)
+			t.Fatalf("timeout: got only %d callbacks, expected 4", collected)
 		}
 	}
 
@@ -257,18 +272,24 @@ func TestWatchPrefix_Compaction(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// запускаем watcher с rev=0 (текущее состояние)
+	// запускаем watcher
 	client, err := NewClientWithConfig(cfg)
 	require.NoError(t, err)
 	defer client.Close()
 
 	ch := make(chan map[string]string, 20)
-	err = client.WatchPrefix(ctx, "test/", 0, func(snapshot map[string]string) {
+	err = client.WatchPrefix(ctx, "test/", func(snapshot map[string]string) {
 		ch <- snapshot
 	})
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
+	// initial snapshot
+	select {
+	case snapshot := <-ch:
+		assert.Len(t, snapshot, 5)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
 
 	// набиваем ещё ревизий
 	for i := 5; i < 15; i++ {
@@ -304,4 +325,41 @@ func TestWatchPrefix_Compaction(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timeout: watcher did not produce snapshot after compaction")
 	}
+}
+
+func TestWatchPrefix_GracefulShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cfg, cleanup, err := startEtcdContainer(ctx)
+	require.NoError(t, err)
+	defer cleanup()
+
+	client, err := NewClientWithConfig(cfg)
+	require.NoError(t, err)
+	defer client.Close()
+
+	callbackCount := 0
+	ch := make(chan struct{}, 10)
+	err = client.WatchPrefix(ctx, "test/", func(snapshot map[string]string) {
+		callbackCount++
+		ch <- struct{}{}
+	})
+	require.NoError(t, err)
+
+	// initial snapshot
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for initial snapshot")
+	}
+
+	// отменяем контекст — watch должен завершиться без retry
+	cancel()
+	time.Sleep(500 * time.Millisecond)
+
+	countAfterCancel := callbackCount
+
+	// ждём ещё немного — убеждаемся что callback'ов больше нет (нет retry)
+	time.Sleep(500 * time.Millisecond)
+	assert.Equal(t, countAfterCancel, callbackCount, "no more callbacks after context cancellation")
 }
