@@ -133,18 +133,7 @@ func main() {
 }
 ```
 
-**Шаг 3.** Зафиксируйте зависимость в 'internal/tools/tools.go':
-```go
-//go:build tools
-
-package tools
-
-import (
-	_ "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
-)
-```
-
-**Шаг 4.** Добавьте `Makefile`:
+**Шаг 3.** Добавьте `Makefile`:
 
 ```makefile
 PLATFORM_PATH  = $(shell go list -m -f '{{.Dir}}' easybnk.gitlab.yandexcloud.net/backend/platform-core)
@@ -159,7 +148,7 @@ generate-check:
 	CHECK=1 bash $(PLATFORM_PATH)/scripts/openapi-generate.sh $(SERVICE_ROOT)/api/openapi $(SERVICE_ROOT)
 ```
 
-**Шаг 5.** Запустите генерацию:
+**Шаг 4.** Запустите генерацию:
 
 ```bash
 make generate
@@ -172,9 +161,9 @@ myservice/
 ├── api/
 │   └── openapi/
 │       ├── items.yaml                           # ВЫ СОЗДАЛИ
-│       └── embed.go                             # СГЕНЕРИРОВАНО: go:embed спецификаций
+│       └── embed.gen.go                         # ВЫ СОЗДАЛИ (с помощью service-template)
 ├── cmd/app/
-│   └── main.go                                  # ВЫ СОЗДАЛИ
+│   └── main.go                                  # ВЫ СОЗДАЛИ (с помощью service-template)
 ├── internal/
 │   ├── api/items/
 │   │   └── api.gen.go                           # СГЕНЕРИРОВАНО: типы, интерфейсы, роутер
@@ -182,7 +171,7 @@ myservice/
 │       ├── register.go                          # СГЕНЕРИРОВАНО: агрегатор всех хэндлеров
 │       └── items/
 │           ├── handler.go                       # СГЕНЕРИРОВАНО: ItemsHandler с заглушками
-│           └── register.go                      # СГЕНЕРИРОВАНО: регистрация на mux
+│           └── register.gen.go                  # СГЕНЕРИРОВАНО: регистрация на mux
 └── Makefile
 ```
 
@@ -190,7 +179,7 @@ myservice/
 - `"Items API"` → `ItemsHandler`
 - `"User Management API"` → `UserManagementHandler`
 
-**Шаг 6.** Реализуйте бизнес-логику — замените `panic("not implemented")` в `internal/handler/items/handler.go`:
+**Шаг 5.** Реализуйте бизнес-логику — замените `todo: implement me` в `internal/handler/items/handler.go`:
 
 ```go
 func (h *ItemsHandler) GetItemById(ctx context.Context, req gen.GetItemByIdRequestObject) (gen.GetItemByIdResponseObject, error) {
@@ -201,9 +190,8 @@ func (h *ItemsHandler) GetItemById(ctx context.Context, req gen.GetItemByIdReque
 #### Повторная генерация
 
 При повторном запуске `make generate`:
-- `api/embed.go` — перегенерируется всегда
 - `internal/api/*/api.gen.go` — перегенерируется всегда
-- `internal/handler/register.go` — перегенерируется всегда (агрегатор, подхватывает новые спецификации)
+- `internal/handler/register.gen.go` — перегенерируется всегда (агрегатор, подхватывает новые спецификации)
 - `internal/handler/*/handler.go` — **НЕ перезаписывается**, чтобы не потерять бизнес-логику
 - `internal/handler/*/register.go` — **НЕ перезаписывается**
 
@@ -230,7 +218,7 @@ internal/
 │   ├── items/api.gen.go
 │   └── users/api.gen.go
 └── handler/
-    ├── register.go          # автоматически вызывает items.Register + users.Register
+    ├── register.gen.go          # автоматически вызывает items.Register + users.Register
     ├── items/handler.go
     └── users/handler.go
 ```
