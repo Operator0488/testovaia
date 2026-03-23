@@ -26,17 +26,18 @@
 
 Все middleware применяются автоматически к HTTP-серверу в следующем порядке:
 
-1. **Panic Recovery** — перехватывает панику, возвращает JSON `{"error":"internal server error","correlation_id":"..."}` с HTTP 500. Детали паники логируются с correlation_id для поиска в логах.
+1. **Panic Recovery** — перехватывает панику, возвращает JSON в формате Envelope с HTTP 500. Детали паники логируются для поиска в логах.
 2. **HTTP Metrics** — Prometheus метрики: `http_requests_total`, `http_request_duration_seconds` с лейблами method/path/status_code.
 3. **Liveness** `/healthz/live` — возвращает 200 если httpServer жив.
 4. **Readiness** `/healthz/ready` — проверяет что приложение перешло в состояние `started`.
 
 При использовании `WithOpenAPI` дополнительно подключаются:
 
-5. **Swagger UI** — `/swagger/` отдает интерактивную документацию, `/swagger/{name}/openapi.json` — спецификацию. При нескольких спецификациях отображается выпадающий список для выбора.
-6. **Auth** — проверка аутентификации (по умолчанию заглушка с warn-логом).
-7. **Rate Limiter** — ограничение количества запросов (по умолчанию заглушка с warn-логом).
-8. **Validation** — автоматическая валидация запросов по всем OpenAPI-схемам (kin-openapi). При наличии нескольких спецификаций middleware последовательно ищет маршрут в каждой из них.
+5. **Envelope** — оборачивает успешные (2xx) JSON-ответы в единую структуру `{ "payload": <DTO>, "error": null }`. Ошибки (4xx/5xx) возвращаются в формате `{ "payload": null, "error": { "traceId": "...", "message": "..." } }`. Служебные пути (/healthz, /metrics, /swagger) не оборачиваются.
+6. **Swagger UI** — `/swagger/` отдает интерактивную документацию, `/swagger/{name}/openapi.json` — спецификацию. При нескольких спецификациях отображается выпадающий список для выбора.
+7. **Auth** — проверка аутентификации (по умолчанию заглушка с warn-логом).
+8. **Rate Limiter** — ограничение количества запросов (по умолчанию заглушка с warn-логом).
+9. **Validation** — автоматическая валидация запросов по всем OpenAPI-схемам (kin-openapi). При наличии нескольких спецификаций middleware последовательно ищет маршрут в каждой из них.
 
 ##### Пробы для `/healthz/live`
 Возвращает 200 если компонент httpServer жив
@@ -275,6 +276,21 @@ make generate-check
 - Swagger UI на `/swagger/` (с выбором спецификации при наличии нескольких)
 - Валидация запросов по всем OpenAPI-схемам
 - Panic recovery, метрики, трассировка
+- Единый формат ответов Envelope (см. `pkg/http/response`)
+
+#### Формат ответов (pkg/http/response)
+
+Все JSON-ответы API используют структуру Envelope:
+
+```json
+{
+  "payload": <DTO>,
+  "error": { "traceId": "guid", "message": "string" }
+}
+```
+
+- Успех: `payload` содержит данные, `error` = null.
+- Ошибка: `payload` = null, `error` содержит traceId и message.
 
 ### Примеры использования Kafka
 

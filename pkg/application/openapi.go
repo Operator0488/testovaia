@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/http/response"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
 )
 
@@ -77,6 +78,7 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 		return fmt.Errorf("openapi swagger init failed: %w", err)
 	}
 
+	app.middlewares.Add(response.EnvelopeMiddleware)
 	app.middlewares.Add(swaggerMw)
 	app.middlewares.Add(authMiddleware)
 	app.middlewares.Add(rateLimitMiddleware)
