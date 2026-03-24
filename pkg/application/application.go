@@ -58,6 +58,7 @@ type Application struct {
 	// initializing components
 	Redis            redis.Redis
 	DB               db.DbClient
+	dbManager        db.Manager
 	Kafka            kafka.KafkaClient
 	Workflow         workflow.WorkflowBuilder
 	S3               s3client.Client

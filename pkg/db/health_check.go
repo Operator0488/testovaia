@@ -28,15 +28,7 @@ func (m *manager) startHealthCheck() {
 
 // checkHealth проверяет здоровье соединения
 func (m *manager) checkHealth(ctx context.Context) {
-	sqlDB, err := m.db.DB()
-	if err != nil {
-		m.healthStatus = false
-		m.healthErr = err
-		logger.Error(ctx, "health check failed to get sql.DB", zap.Error(err))
-		return
-	}
-
-	if err := sqlDB.Ping(); err != nil {
+	if err := m.pool.Ping(ctx); err != nil {
 		m.healthStatus = false
 		m.healthErr = err
 		logger.Warn(ctx, "postgres health check failed", zap.Error(err))

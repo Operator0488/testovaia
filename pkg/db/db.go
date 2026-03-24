@@ -2,23 +2,16 @@ package db
 
 import (
 	"context"
-	"fmt"
 
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"gorm.io/gorm"
-)
-
-// Custom errors
-var (
-	ErrConnectionFailed  = fmt.Errorf("postgres connection failed")
-	ErrNotConnected      = fmt.Errorf("postgres not connected")
-	ErrHealthCheckFailed = fmt.Errorf("postgres health check failed")
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // manager - менеджер подключений к PostgreSQL
 type manager struct {
 	config Config
-	db     *gorm.DB
+	pool   *pgxpool.Pool
 
 	// Health check
 	healthStatus    bool
@@ -26,18 +19,22 @@ type manager struct {
 	stopHealthCheck chan struct{}
 }
 
+// Manager — внутренний интерфейс для управления подключением
 type Manager interface {
-	DB(context.Context) *gorm.DB
 	Connect(context.Context) error
 	Migrate(context.Context) (int, error)
 	Close() error
-	WithTransaction(context.Context, func(context.Context) error) error
 	HealthStatus() (bool, error)
+	DB() DbClient
 }
 
+// DbClient — публичный интерфейс для сервисов (через DI).
+// Объединяет выполнение запросов (Querier) и управление транзакциями (TxManager).
 type DbClient interface {
-	DB(context.Context) *gorm.DB
-	WithTransaction(context.Context, func(context.Context) error) error
+	Querier
+	TxManager
+	// Pool возвращает *pgxpool.Pool для операций, которым нужен именно пул (CopyFrom, Acquire и т.д.)
+	Pool() *pgxpool.Pool
 }
 
 // NewManager создает новый менеджер подключений
@@ -50,37 +47,34 @@ func NewPostgresManager(ctx context.Context, cfg Config) (Manager, error) {
 	return manager, nil
 }
 
-// Close закрывает соединение и останавливает health check
-func (m *manager) Close() error {
-	close(m.stopHealthCheck)
-
-	if m.db != nil {
-		sqlDB, err := m.db.DB()
-		if err != nil {
-			return fmt.Errorf("failed to get sql.DB: %w", err)
-		}
-		return sqlDB.Close()
-	}
-
-	return nil
-}
-
 // IsHealthy возвращает true если соединение здорово
 func (m *manager) IsHealthy() bool {
 	status, _ := m.HealthStatus()
 	return status
 }
 
-// configureConnectionPool настраивает пул соединений
-func (m *manager) configureConnectionPool(ctx context.Context) {
-	sqlDB, err := m.db.DB()
-	if err != nil {
-		logger.Error(ctx, "failed to get sql.DB from gorm", logger.Err(err))
-		return
-	}
+func (m *manager) DB() DbClient {
+	return m
+}
 
-	sqlDB.SetMaxOpenConns(m.config.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(m.config.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(m.config.ConnMaxLifetime)
-	//sqlDB.SetConnMaxIdleTime(time.Minute * 5) // можно добавить
+func (m *manager) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return m.pool.Exec(ctx, sql, args...)
+}
+
+func (m *manager) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return m.pool.Query(ctx, sql, args...)
+}
+
+func (m *manager) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return m.pool.QueryRow(ctx, sql, args...)
+}
+
+// Pool возвращает *pgxpool.Pool для операций, требующих прямой доступ к пулу
+func (m *manager) Pool() *pgxpool.Pool {
+	return m.pool
+}
+
+// NewDbClient создаёт DbClient из готового пула соединений.
+func NewDbClient(pool *pgxpool.Pool) DbClient {
+	return &manager{pool: pool, stopHealthCheck: make(chan struct{})}
 }

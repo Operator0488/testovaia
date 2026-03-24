@@ -2,41 +2,42 @@ package db
 
 import (
 	"context"
-
-	"gorm.io/gorm"
+	"fmt"
 )
 
-// contextKey - кастомный тип для ключа контекста (безопасный от коллизий)
-type contextKey string
+// txCtxKey — ключ контекста для хранения транзакции
+type txCtxKey struct{}
 
-const (
-	transactionKey contextKey = "gorm_tx"
-)
-
-// withTransactionContext помещает транзакцию в контекст
-func withTransactionContext(ctx context.Context, tx *gorm.DB) context.Context {
-	return context.WithValue(ctx, transactionKey, tx)
+// TxFromContext извлекает Querier транзакции из контекста.
+// Возвращает nil, если транзакции нет.
+func TxFromContext(ctx context.Context) Querier {
+	tx, _ := ctx.Value(txCtxKey{}).(Querier)
+	return tx
 }
 
-// transactionFromContext извлекает транзакцию из контекста
-func transactionFromContext(ctx context.Context) (*gorm.DB, bool) {
-	tx, ok := ctx.Value(transactionKey).(*gorm.DB)
-	return tx, ok
+// contextWithTx помещает транзакцию в контекст
+func contextWithTx(ctx context.Context, tx Querier) context.Context {
+	return context.WithValue(ctx, txCtxKey{}, tx)
 }
 
-// WithTransaction выполняет операцию в транзакции
-func (m *manager) WithTransaction(ctx context.Context, fn func(txContext context.Context) error) error {
-	return m.db.Transaction(func(tx *gorm.DB) error {
-		ctx = withTransactionContext(ctx, tx)
-		return fn(ctx)
-	})
-}
-
-// DB возвращает инициализированный инстанс *gorm.DB
-// Если в переданном контексте уже есть транзакционный инстанс то вернется он
-func (m *manager) DB(ctx context.Context) *gorm.DB {
-	if tx, ok := transactionFromContext(ctx); ok {
-		return tx
+// WithTransaction выполняет fn в транзакции.
+// Транзакция помещается в контекст — репозитории, использующие BaseRepository.Querier(ctx),
+// автоматически будут выполнять запросы в этой транзакции.
+// Возвращает ErrNestedTransaction, если в контексте уже есть транзакция.
+// Если fn возвращает nil — commit, иначе — rollback.
+func (m *manager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	if TxFromContext(ctx) != nil {
+		return ErrNestedTransaction
 	}
-	return m.db
+
+	tx, err := m.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op после commit
+
+	if err := fn(contextWithTx(ctx, tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
