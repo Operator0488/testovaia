@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/etcd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/etcd"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -254,4 +254,3 @@ func TestProvider_PrefixIsolation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "hostA", getValueByPath(resultA, "db", "host"))
 }
-

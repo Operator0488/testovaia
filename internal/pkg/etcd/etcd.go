@@ -18,7 +18,7 @@ type Client interface {
 }
 
 type etcdClient struct {
-	client              *clientv3.Client
+	client            *clientv3.Client
 	lastKnownRevision int64
 }
 

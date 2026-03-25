@@ -84,4 +84,3 @@ func TestRoundTrip(t *testing.T) {
 	restored := convertToObject("app", flat)
 	assert.Equal(t, original, restored)
 }
-
