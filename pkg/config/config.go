@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config"
 	configprovider "easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/config_provider"
@@ -35,6 +36,8 @@ func GetConfig() config.Configurer {
 
 func Init(ctx context.Context, opts ...InitOption) error {
 	var err error
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
 	once.Do(func() {
 		o := applyInitOptions(opts...)
 
