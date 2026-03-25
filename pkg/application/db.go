@@ -9,9 +9,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 )
 
-var (
-	dbComponent = NewComponent("postgres", initPostgresClient, runPostgresClient)
-)
+var dbComponent = NewComponent("postgres", initPostgresClient, runPostgresClient)
 
 // WithDB добавляет компонент базы данных в сервис (Postgres)
 func WithDB() Option {
@@ -29,19 +27,18 @@ func initPostgresClient(ctx context.Context, app *Application) error {
 		return err
 	}
 
-	app.DB = manager
-	di.Register(ctx, app.DB)
+	app.dbManager = manager
+	app.DB = manager.DB()
+	di.Register[db.DbClient](ctx, manager.DB())  // полный клиент
+	di.Register[db.Querier](ctx, manager.DB())   // для репозиториев
+	di.Register[db.TxManager](ctx, manager.DB()) // для сервисов
 	return nil
 }
 
 func runPostgresClient(ctx context.Context, app *Application) error {
-	if app.DB == nil {
-		return fmt.Errorf("db.Client not initialized")
-	}
-
-	manager, ok := app.DB.(db.Manager)
-	if !ok {
-		return fmt.Errorf("failed to cast app.DB to db.Manager")
+	manager := app.dbManager
+	if manager == nil {
+		return fmt.Errorf("app.dbManager not initialized")
 	}
 
 	if err := manager.Connect(ctx); err != nil {

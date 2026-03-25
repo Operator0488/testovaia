@@ -4,50 +4,41 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func (m *manager) connect() error {
-	dsn := m.buildDSN()
-
-	gormConfig := &gorm.Config{}
-
-	// Настройка логирования GORM в зависимости от уровня
-	if m.config.LogLevel != "none" {
-		gormConfig.Logger = newLogger(logger.GetLogger(), m.config)
-	}
-
-	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
-	if err != nil {
-		return fmt.Errorf("failed to open gorm connection: %w", err)
-	}
-
-	m.db = db
-	return nil
-}
-
-func (m *manager) ping(ctx context.Context) error {
-	db, err := m.db.DB()
-	if err != nil {
-		return err
-	}
-	return db.PingContext(ctx)
-}
-
 func (m *manager) Connect(ctx context.Context) error {
-	if err := m.connect(); err != nil {
-		return fmt.Errorf("failed to connect to postgres: %w", err)
+	poolConfig, err := pgxpool.ParseConfig(m.buildDSN())
+	if err != nil {
+		return fmt.Errorf("parse pool config: %w", err)
+	}
+	poolConfig.MaxConnLifetime = m.config.ConnMaxLifetime
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return fmt.Errorf("create postgres pool: %w", err)
 	}
 
-	if err := m.ping(ctx); err != nil {
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return fmt.Errorf("failed to ping: %w", err)
 	}
 
-	m.configureConnectionPool(ctx)
+	m.pool = pool
 	m.startHealthCheck()
+
+	return nil
+}
+
+// Close закрывает соединение и останавливает health check
+func (m *manager) Close() error {
+	close(m.stopHealthCheck)
+
+	if m.pool != nil {
+		m.pool.Close()
+	}
 
 	return nil
 }
@@ -67,6 +58,8 @@ func (m *manager) buildDSN() string {
 
 	query := u.Query()
 	query.Set("sslmode", m.config.SSLMode)
+	query.Set("pool_max_conns", strconv.Itoa(m.config.MaxOpenConns))
+	query.Set("pool_min_conns", strconv.Itoa(m.config.MaxIdleConns))
 	u.RawQuery = query.Encode()
 
 	return u.String()
