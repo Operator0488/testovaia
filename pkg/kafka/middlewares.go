@@ -2,8 +2,9 @@ package kafka
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
@@ -18,7 +19,6 @@ const (
 // traceProduceMiddleware add trace info to message headers
 func traceProduceMiddleware(topic string) produceMiddleware {
 	return func(ctx context.Context, messages []Message, next produceFunc) error {
-
 		tracer := otel.Tracer(kafkaProducerTracerName)
 		ctx, span := tracer.Start(ctx, kafkaProducerTracerName+" "+topic)
 		defer span.End()
@@ -84,7 +84,6 @@ func healthCheckConsumeMiddleware(health HealthCheker) consumeMiddleware {
 
 func metricsProduceMiddleware() produceMiddleware {
 	return func(ctx context.Context, messages []Message, next produceFunc) error {
-
 		var topic string
 
 		if len(messages) > 0 {
@@ -110,7 +109,6 @@ func metricsProduceMiddleware() produceMiddleware {
 
 func metricsConsumeMiddleware() consumeMiddleware {
 	return func(ctx context.Context, msg Message, next ConsumeHandler) error {
-
 		topic := msg.Topic
 
 		start := time.Now()

@@ -34,8 +34,10 @@ type comparable[T any] interface {
 	Compare(other T) bool
 }
 
-var _ IConfigSubscriber = (*ConfigWatcher[any])(nil)
-var _ IConfigWatcher[any] = (*ConfigWatcher[any])(nil)
+var (
+	_ IConfigSubscriber   = (*ConfigWatcher[any])(nil)
+	_ IConfigWatcher[any] = (*ConfigWatcher[any])(nil)
+)
 
 // NewConfigWatcher create config wrapper, which safely update config.
 func NewConfigWatcher[T any](name string, cfg Configurer, create func(Configurer) T) *ConfigWatcher[T] {

@@ -2,17 +2,19 @@ package client
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"time"
+
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/di"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/client/interceptors"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"fmt"
+
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"sync"
-	"time"
 )
 
 // ClientRegistration репрезентует регистрацию gRPC клиента
@@ -56,7 +58,6 @@ func NewManager() *Manager {
 }
 
 func AddGenericRegistration[T any](m *Manager, serviceName string, constructor any) {
-
 	r, ok := constructor.(func(grpc.ClientConnInterface) T)
 	if !ok {
 		panic(fmt.Errorf("constructor for %q must be func(grpc.ClientConnInterface) %T", serviceName, *new(T)))
@@ -79,6 +80,7 @@ func AddGenericRegistration[T any](m *Manager, serviceName string, constructor a
 func (m *Manager) AddUnaryInterceptor(i grpc.UnaryClientInterceptor) {
 	m.unaryInterceptors = append(m.unaryInterceptors, i)
 }
+
 func (m *Manager) AddStreamInterceptor(i grpc.StreamClientInterceptor) {
 	m.streamInterceptors = append(m.streamInterceptors, i)
 }

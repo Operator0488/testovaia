@@ -75,8 +75,8 @@ func (svc *workflowBuilder) WithProcess(bpmnPath string) WorkflowBuilder {
 func (svc *workflowBuilder) WithHandler(
 	taskName string,
 	handler WorkflowTaskHandler,
-	config ...TaskHandlerConfig) WorkflowBuilder {
-
+	config ...TaskHandlerConfig,
+) WorkflowBuilder {
 	var handleConfig TaskHandlerConfig
 	if len(config) > 0 {
 		handleConfig = config[0]

@@ -23,7 +23,6 @@ func (t *template) Execute(p parser.Parser, data interface{}) (string, error) {
 		t.parsedTemplate, t.parseError = p.Parse(t.Src, t.LeftDelim, t.RightDelim)
 	})
 	pt, err = t.parsedTemplate, t.parseError
-
 	if err != nil {
 		return "", err
 	}

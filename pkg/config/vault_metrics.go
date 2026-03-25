@@ -1,9 +1,10 @@
 package config
 
 import (
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"strings"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 )
 
 func withMetrics[T any](typ, mount, path string, f func() (T, error)) (T, error) {

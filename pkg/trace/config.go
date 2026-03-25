@@ -9,14 +9,14 @@ import (
 type TracingConfig struct {
 	Endpoint    string  // прим: "tempo:4317"/ "localhost:4317"
 	Insecure    bool    // true для локальной без TLS
-	SampleRatio float64 //трассируем: 1 — все, 0 — ничего
-	ServiceName string  //идентификатор имени сервиса
+	SampleRatio float64 // трассируем: 1 — все, 0 — ничего
+	ServiceName string  // идентификатор имени сервиса
 	ServiceEnv  string  // енв
 	ServiceVer  string  // версия приложения
 	Username    string
 	Password    string
 	Protocol    string // протокол otlp либо grpc либо http/protobuf
-	//UseCollector bool // использовать коллектор или нет
+	// UseCollector bool // использовать коллектор или нет
 }
 
 func GetTracingConfig(a config.Configurer) (TracingConfig, error) {

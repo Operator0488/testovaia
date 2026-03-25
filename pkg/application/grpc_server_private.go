@@ -2,15 +2,15 @@ package application
 
 import (
 	"context"
+	"fmt"
+
 	grpcserver "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"fmt"
+
 	"google.golang.org/grpc"
 )
 
-var (
-	grpcPrivateServerComponent = NewComponent("grpc-private-server", initPrivateGrpcServer, runPrivateGrpcServer)
-)
+var grpcPrivateServerComponent = NewComponent("grpc-private-server", initPrivateGrpcServer, runPrivateGrpcServer)
 
 // helper
 func (a *Application) addPrivateGrpcServer() {
@@ -45,6 +45,7 @@ func WithPrivateGrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 		return nil
 	}
 }
+
 func WithPrivateGrpcStreamInterceptor(i grpc.StreamServerInterceptor) Option {
 	return func(app *Application) error {
 		app.PrivateGrpcServer.AddStreamInterceptor(i)

@@ -67,7 +67,7 @@ type Application struct {
 	Localizer        localize.Localizer
 	translateManager translations.TranslateManager
 
-	//GRPC
+	// GRPC
 	PrivateGrpcServer *grpcserver.Manager
 	PublicGrpcServer  *grpcserver.Manager
 	GrpcClients       *grpcclient.Manager

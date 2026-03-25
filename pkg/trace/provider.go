@@ -18,7 +18,6 @@ import (
 )
 
 func InitProvider(ctx context.Context, cfg TracingConfig) (shutdown func(context.Context) error, err error) {
-
 	logger.Info(ctx, "Init OpenTelemetry provider",
 		logger.String("protocol", cfg.Protocol),
 		logger.String("endpoint", cfg.Endpoint),
@@ -59,8 +58,8 @@ func InitProvider(ctx context.Context, cfg TracingConfig) (shutdown func(context
 	}
 
 	res, _ := resource.New(ctx,
-		resource.WithFromEnv(), //атрибуты из переменной
-		resource.WithHost(),    //атрибут хоста
+		resource.WithFromEnv(), // атрибуты из переменной
+		resource.WithHost(),    // атрибут хоста
 		resource.WithAttributes(
 			semconv.ServiceName(cfg.ServiceName),
 			semconv.ServiceVersion(cfg.ServiceVer),

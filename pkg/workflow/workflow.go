@@ -62,8 +62,8 @@ type workflowService struct {
 func (svc *workflowService) StartProcess(
 	ctx context.Context,
 	processName string,
-	variables map[string]interface{}) (*WorkflowInstance, error) {
-
+	variables map[string]interface{},
+) (*WorkflowInstance, error) {
 	if !svc.readyToWork.Load() {
 		return nil, ErrWorkflowIsNotReady
 	}
@@ -93,8 +93,8 @@ func (svc *workflowService) SendEvent(
 	ctx context.Context,
 	messageKey string,
 	correlationKey string,
-	variables map[string]interface{}) error {
-
+	variables map[string]interface{},
+) error {
 	if !svc.readyToWork.Load() {
 		return ErrWorkflowIsNotReady
 	}
@@ -174,8 +174,8 @@ func (svc *workflowService) DeployBpmn(ctx context.Context, bpmnPath string) {
 func (svc *workflowService) Subscribe(
 	taskName string,
 	taskHandler WorkflowTaskHandler,
-	taskHandlerConfig TaskHandlerConfig) {
-
+	taskHandlerConfig TaskHandlerConfig,
+) {
 	// Обертка над хэндлером чтобы получить доступ к скоупу данных
 	taskHandlerWrapper := func(client worker.JobClient, job entities.Job) {
 		ctx := context.WithValue(context.Background(), logger.CorrelationId, uuid.New().String())
@@ -262,8 +262,8 @@ func (svc *workflowService) handleErrorTask(
 	ctx context.Context,
 	client worker.JobClient,
 	job entities.Job,
-	taskHandlerConfig TaskHandlerConfig) {
-
+	taskHandlerConfig TaskHandlerConfig,
+) {
 	var cancelFn context.CancelFunc
 	ctx, cancelFn = context.WithTimeout(ctx, cancelOperationTimeoutInSec*time.Second)
 	defer cancelFn()
@@ -274,7 +274,6 @@ func (svc *workflowService) handleErrorTask(
 		Retries(job.Retries + 1).
 		RetryBackoff(taskHandlerConfig.RetryTimeoutSec * time.Second).
 		Send(ctx)
-
 	if err != nil {
 		logger.Error(ctx, "Failed to send fail job message. task will be retry after timeout", logger.Err(err))
 		return
@@ -287,8 +286,8 @@ func (svc *workflowService) handleIncidentTask(
 	ctx context.Context,
 	client worker.JobClient,
 	job entities.Job,
-	errData error) {
-
+	errData error,
+) {
 	var cancelFn context.CancelFunc
 	ctx, cancelFn = context.WithTimeout(ctx, cancelOperationTimeoutInSec*time.Second)
 	defer cancelFn()
@@ -299,7 +298,6 @@ func (svc *workflowService) handleIncidentTask(
 		Retries(0).
 		ErrorMessage(errData.Error()).
 		Send(ctx)
-
 	if err != nil {
 		logger.Error(ctx, "Failed to send incident job message. task will be retry after timeout", logger.Err(err))
 		return

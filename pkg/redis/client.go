@@ -2,11 +2,12 @@ package redis
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	goRedis "github.com/redis/go-redis/v9"
@@ -15,16 +16,16 @@ import (
 const collectMetricsInterval = 5 * time.Second
 
 type Redis interface {
-	//базовые команды
+	// базовые команды
 	Set(ctx context.Context, key string, val any, ttl time.Duration) error
 	Get(ctx context.Context, key string) Value
 	Del(ctx context.Context, keys ...string) error
 
-	//для pubsub
+	// для pubsub
 	Publish(ctx context.Context, channel string, msg any) error
 	Subscribe(ctx context.Context, channels ...string) (Subscriber, error)
 
-	//для healthcheck
+	// для healthcheck
 	HealthCheck(context.Context) error
 
 	Close() error
@@ -42,11 +43,10 @@ type client struct {
 	subsMu sync.RWMutex
 	subs   map[*subscriber]struct{}
 
-	poolStop chan struct{} //канал для метрик пула
+	poolStop chan struct{} // канал для метрик пула
 }
 
 func New(ctx context.Context, cfg RedisConfig) (Redis, error) {
-
 	c := &client{
 		cfg:      cfg,
 		codec:    JSONCodec{},
@@ -69,7 +69,7 @@ func New(ctx context.Context, cfg RedisConfig) (Redis, error) {
 	metrics.RedisConnections.WithLabelValues("idle").Set(0)
 	metrics.RedisConnections.WithLabelValues("in_use").Set(0)
 
-	//сбор статы
+	// сбор статы
 	go c.collectPoolMetrics()
 
 	go c.health.start(ctx, c)
@@ -83,7 +83,6 @@ func New(ctx context.Context, cfg RedisConfig) (Redis, error) {
 
 // пересоздание клиента с новыми кредами
 func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -99,7 +98,7 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 	}
 
 	newcli := goRedis.NewUniversalClient(opts)
-	//cli.AddHook(redisLoggerHook{})
+	// cli.AddHook(redisLoggerHook{})
 
 	// пингуем новый клиент, если не ок, то закрываем и возвращаем ошибку
 	if err := newcli.Ping(ctx).Err(); err != nil {
@@ -113,7 +112,7 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 		return fmt.Errorf("redis ping err, RebilClient: %w", err)
 	}
 
-	//сохраняем старые подписки ДО замены клиента
+	// сохраняем старые подписки ДО замены клиента
 	c.subsMu.RLock()
 	activeSubscriptions := c.subs // map[*subscriber]struct{}
 	c.subsMu.RUnlock()
@@ -150,7 +149,6 @@ func (c *client) universal() goRedis.UniversalClient {
 
 // переподписываем все подписки
 func (c *client) resubscribeAll(ctx context.Context, subscriptions map[*subscriber]struct{}, newClient goRedis.UniversalClient) error {
-
 	var errors []error
 
 	// проходим по подписчикам напрямую
@@ -207,10 +205,9 @@ func (c *client) lastUsed() time.Time {
 }
 
 func (c *client) Close() error {
-
 	select {
 	case <-c.poolStop:
-		//закрыт
+		// закрыт
 	default:
 		close(c.poolStop)
 	}

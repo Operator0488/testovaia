@@ -2,11 +2,12 @@ package logger
 
 import (
 	"context"
+	"testing"
+
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
-	"testing"
 )
 
 func TestLogger_With(t *testing.T) {
@@ -38,7 +39,6 @@ func TestLogger_With(t *testing.T) {
 }
 
 func TestLogger_WithTraceID(t *testing.T) {
-
 	const traceIdValue = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 	log, observedLogs := resolveMockLogger()

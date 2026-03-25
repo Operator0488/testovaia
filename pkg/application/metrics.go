@@ -2,15 +2,14 @@ package application
 
 import (
 	"context"
+	"net/http"
+
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
 )
 
-var (
-	metricsComponent = NewComponent("metrics", initMetrics, runMetrics)
-)
+var metricsComponent = NewComponent("metrics", initMetrics, runMetrics)
 
 func WithMetrics() Option {
 	return func(app *Application) error {

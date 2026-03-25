@@ -2,14 +2,16 @@ package client
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/di"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"net"
 	"testing"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/di"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func startHealthServer(t *testing.T) (addr string, stop func()) {

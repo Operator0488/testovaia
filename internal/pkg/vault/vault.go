@@ -49,8 +49,7 @@ func (vl *VaultClient) LoadPKI(ctx context.Context, path string) (interface{}, e
 	}
 
 	secret, err := vl.client.Logical().Read(path)
-
-	//secret, err := vl.client.Logical().Read(path)
+	// secret, err := vl.client.Logical().Read(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PKI secret: %w", err)
 	}

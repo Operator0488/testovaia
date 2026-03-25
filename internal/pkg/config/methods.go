@@ -59,6 +59,7 @@ func (c *Config) GetInt32(key string) int32 {
 	defer c.mu.RUnlock()
 	return c.getViperInstance(key).GetInt32(key)
 }
+
 func (c *Config) GetInt64(key string) int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

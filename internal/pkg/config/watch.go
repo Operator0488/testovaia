@@ -68,7 +68,6 @@ func (c *Config) watchStorage(ctx context.Context, storage *storage) error {
 		default:
 		}
 	})
-
 	if err != nil {
 		if errors.Is(err, configprovider.ErrUnsupported) {
 			return nil

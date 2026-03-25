@@ -2,23 +2,25 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"reflect"
+	"sync"
+	"time"
+
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server/interceptors"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"fmt"
+
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
-	"net"
-	"reflect"
-	"sync"
-	"time"
 )
 
 const (
-	timestop = 10 * time.Second //время для ожидания выполнения m.grpc.GracefulStop()
+	timestop = 10 * time.Second // время для ожидания выполнения m.grpc.GracefulStop()
 )
 
 // Конфиг сервера

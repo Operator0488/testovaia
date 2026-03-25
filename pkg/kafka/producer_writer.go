@@ -17,8 +17,10 @@ var (
 	defaultRequireAck          = RequireOne
 )
 
-type RequiredAcks int
-type CleanupPolicy string
+type (
+	RequiredAcks  int
+	CleanupPolicy string
+)
 
 const (
 	RequireNone RequiredAcks = 0

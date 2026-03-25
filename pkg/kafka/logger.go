@@ -20,5 +20,4 @@ func (l *loggerWrap) Printf(msg string, args ...interface{}) {
 		return
 	}
 	logger.Info(context.TODO(), msg)
-
 }

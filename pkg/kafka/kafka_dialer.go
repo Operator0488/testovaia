@@ -8,8 +8,10 @@ import (
 	"github.com/segmentio/kafka-go/sasl"
 )
 
-type dialer = kafka.Dialer
-type Mechanism = sasl.Mechanism
+type (
+	dialer    = kafka.Dialer
+	Mechanism = sasl.Mechanism
+)
 
 const (
 	dialerTimeout  = 30 * time.Second

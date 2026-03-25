@@ -10,9 +10,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/s3client"
 )
 
-var (
-	s3Component = NewComponent("s3", initS3Client, runS3Client)
-)
+var s3Component = NewComponent("s3", initS3Client, runS3Client)
 
 // WithS3 add S3 client component
 func WithS3() Option {

@@ -132,7 +132,6 @@ func (a *Application) httpMetricsMiddleware(next http.HandlerFunc) http.HandlerF
 	propagator := otel.GetTextMapPropagator()
 
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		// не считаем метрики для metrics и healthz
 		if isMetricPath(r.URL.Path) {
 			next(w, r)
