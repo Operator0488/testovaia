@@ -2,13 +2,15 @@ package grpc
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"fmt"
-	"google.golang.org/grpc/grpclog"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 type severity int
@@ -46,6 +48,7 @@ func (l grpcLogger) Info(args ...any) { logger.Info(l.ctx, fmt.Sprint(args...)) 
 func (l grpcLogger) Infoln(args ...any) {
 	logger.Info(l.ctx, strings.TrimSuffix(fmt.Sprintln(args...), "\n"))
 }
+
 func (l grpcLogger) Infof(format string, args ...any) {
 	logger.Info(l.ctx, fmt.Sprintf(format, args...))
 }
@@ -54,6 +57,7 @@ func (l grpcLogger) Warning(args ...any) { logger.Warn(l.ctx, fmt.Sprint(args...
 func (l grpcLogger) Warningln(args ...any) {
 	logger.Warn(l.ctx, strings.TrimSuffix(fmt.Sprintln(args...), "\n"))
 }
+
 func (l grpcLogger) Warningf(format string, args ...any) {
 	logger.Warn(l.ctx, fmt.Sprintf(format, args...))
 }
@@ -62,6 +66,7 @@ func (l grpcLogger) Error(args ...any) { logger.Error(l.ctx, fmt.Sprint(args...)
 func (l grpcLogger) Errorln(args ...any) {
 	logger.Error(l.ctx, strings.TrimSuffix(fmt.Sprintln(args...), "\n"))
 }
+
 func (l grpcLogger) Errorf(format string, args ...any) {
 	logger.Error(l.ctx, fmt.Sprintf(format, args...))
 }

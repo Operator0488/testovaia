@@ -5,9 +5,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
-var (
-	Registry = prometheus.NewRegistry()
-)
+var Registry = prometheus.NewRegistry()
 
 // Init регистрирует системные метрики
 func Init() {

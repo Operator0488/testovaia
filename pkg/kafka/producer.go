@@ -6,8 +6,10 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-type produceFunc func(ctx context.Context, messages []Message) error
-type produceMiddleware func(ctx context.Context, messages []Message, next produceFunc) error
+type (
+	produceFunc       func(ctx context.Context, messages []Message) error
+	produceMiddleware func(ctx context.Context, messages []Message, next produceFunc) error
+)
 
 type Producer interface {
 	Produce(ctx context.Context, msg ...ProduceMessage) error

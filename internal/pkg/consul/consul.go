@@ -11,9 +11,7 @@ import (
 	"github.com/hashicorp/consul/api/watch"
 )
 
-var (
-	ErrNotFound = errors.New("value by key not found")
-)
+var ErrNotFound = errors.New("value by key not found")
 
 type Client interface {
 	GetConfig(key string) (api.KVPairs, error)

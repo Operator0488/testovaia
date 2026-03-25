@@ -2,21 +2,19 @@ package application
 
 import (
 	"context"
+	"fmt"
+
 	grpc1 "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/client"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"fmt"
 )
 
-var (
-	grpcClientComponent = NewComponent("grpc-client", initGrpcClient, Noop)
-)
+var grpcClientComponent = NewComponent("grpc-client", initGrpcClient, Noop)
 
 // WithGrpcClient
 // constructor - proto-конструктор (например, userv2.NewUserServiceClient).
 func WithGrpcClient[TClient any](serviceName string, constructor any) Option {
 	return func(app *Application) error {
-
 		if app.GrpcClients == nil {
 			app.GrpcClients = client.NewManager()
 			app.components.add(component(grpcClientComponent))

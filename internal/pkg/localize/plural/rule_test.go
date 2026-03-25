@@ -33,7 +33,6 @@ func runTests(t *testing.T, pluralRuleID string, tests []pluralFormTest) {
 	} else {
 		t.Errorf("could not find plural rule for locale %s", pluralRuleID)
 	}
-
 }
 
 func appendIntegerTests(tests []pluralFormTest, form Form, examples []string) []pluralFormTest {

@@ -45,7 +45,7 @@ func TestRegisterInterface(t *testing.T) {
 func TestRegisterStructure(t *testing.T) {
 	testContainer := New()
 	ctx := WithContainer(context.Background(), testContainer)
-	var repo = &pgdb.UserRepository{User: "test from interface"}
+	repo := &pgdb.UserRepository{User: "test from interface"}
 	Register(ctx, repo)
 
 	err := testContainer.Build()
@@ -218,7 +218,6 @@ func (m nonPointerUserRepository) GetProfile() string {
 }
 
 func (m nonPointerUserRepository) SetProfile(name string) {
-
 }
 
 type iSuperServiceRepository interface {

@@ -7,9 +7,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/trace"
 )
 
-var (
-	traceComponent = NewComponent("trace", initTrace, Noop)
-)
+var traceComponent = NewComponent("trace", initTrace, Noop)
 
 // WithTrace добавляет OpenTelemetry трассировку
 func WithTrace() Option {
@@ -21,7 +19,6 @@ func WithTrace() Option {
 
 // initTrace инициализация OpenTelemetry
 func initTrace(ctx context.Context, app *Application) error {
-
 	cfg, err := trace.GetTracingConfig(app.Env)
 	if err != nil {
 		logger.Error(ctx, "Get config failed", logger.Err(err))

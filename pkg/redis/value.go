@@ -2,13 +2,15 @@ package redis
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"encoding/json"
 	"errors"
 	"fmt"
-	goRedis "github.com/redis/go-redis/v9"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
+
+	goRedis "github.com/redis/go-redis/v9"
 )
 
 type Value struct {
@@ -35,7 +37,6 @@ func (v Value) IsNotFound() bool {
 }
 
 func (c *client) Get(ctx context.Context, key string) Value {
-
 	start := time.Now()
 	val, err := c.universal().Get(ctx, key).Result()
 	metrics.RedisQueryDuration.WithLabelValues("GET").Observe(time.Since(start).Seconds())
@@ -59,7 +60,6 @@ func (c *client) Get(ctx context.Context, key string) Value {
 }
 
 func (c *client) Set(ctx context.Context, key string, val any, ttl time.Duration) error {
-
 	bt, err := c.codec.Marshal(val)
 	if err != nil {
 		return err
@@ -83,7 +83,6 @@ func (c *client) Set(ctx context.Context, key string, val any, ttl time.Duration
 }
 
 func (c *client) Del(ctx context.Context, keys ...string) error {
-
 	start := time.Now()
 	err := c.universal().Del(ctx, keys...).Err()
 	metrics.RedisQueryDuration.WithLabelValues("DEL").Observe(time.Since(start).Seconds())
@@ -102,7 +101,6 @@ func (c *client) Del(ctx context.Context, keys ...string) error {
 }
 
 func (c *client) Publish(ctx context.Context, channel string, msg any) error {
-
 	b, err := c.codec.Marshal(msg)
 	if err != nil {
 		logger.Error(ctx, "redis marshal failed on publish",
@@ -128,5 +126,4 @@ func (c *client) Publish(ctx context.Context, channel string, msg any) error {
 	)
 
 	return fmt.Errorf("redis publish channel=%v, msg=%v: %w", channel, msg, err)
-
 }

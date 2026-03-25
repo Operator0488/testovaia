@@ -8,9 +8,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 )
 
-var (
-	containerComponent = NewComponent("di", initContainer, runContainer)
-)
+var containerComponent = NewComponent("di", initContainer, runContainer)
 
 // initContainerClient создает глобальный контейнер
 func initContainer(ctx context.Context, app *Application) error {

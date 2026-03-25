@@ -5,9 +5,7 @@ import (
 	"errors"
 )
 
-var (
-	ErrUnsupported = errors.New("method unsupported")
-)
+var ErrUnsupported = errors.New("method unsupported")
 
 //go:generate go run go.uber.org/mock/mockgen -destination=mock/mock.go -package=mock -source=config_provider.go
 

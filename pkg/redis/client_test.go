@@ -337,7 +337,7 @@ func TestHealthLoop_PingError(t *testing.T) {
 }
 
 func TestHealthLoop_SkipOnRecentActivity(t *testing.T) {
-	//ctx := context.Background()
+	// ctx := context.Background()
 
 	c := &client{
 		health: newHealthLoop(),

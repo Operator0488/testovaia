@@ -20,7 +20,6 @@ type TestUser struct {
 
 // ДЛЯ ЗАПУСКА ВКЛЮЧАЕМ ДОКЕР
 func TestRedisIntegration_WithDocker(t *testing.T) {
-
 	log.Println("=== START TESTS ===")
 
 	ctx := context.Background()
@@ -84,21 +83,18 @@ func TestRedisIntegration_WithDocker(t *testing.T) {
 		}
 		t.Fatal("basic operations with rebuild failed")
 	}
-
 }
 
 func pubsubOperations(ctx context.Context, client Redis) []error {
-
 	log.Println("=== Pubsub Operations START ===")
 	var errSlice []error
 
 	sub, err := client.Subscribe(ctx, "info", "order", "done")
-
 	if err != nil {
 		errSlice = append(errSlice, fmt.Errorf("Sub Operations Error: %v", err))
 	}
 
-	var user = TestUser{
+	user := TestUser{
 		12345,
 		"Igor",
 	}
@@ -123,21 +119,18 @@ func pubsubOperations(ctx context.Context, client Redis) []error {
 	log.Println("=== Pubsub Operations END ===")
 
 	return errSlice
-
 }
 
 func pubsubOperationsWithRebuild(ctx context.Context, cl Redis, conf RedisConfig) []error {
-
 	log.Println("=== Pubsub Operations With Rebuild START ===")
 	var errSlice []error
 
 	sub, err := cl.Subscribe(ctx, "info", "order", "done")
-
 	if err != nil {
 		errSlice = append(errSlice, fmt.Errorf("Sub Operations Error: %v", err))
 	}
 
-	var user = TestUser{
+	user := TestUser{
 		123,
 		"Ifor",
 	}
@@ -184,15 +177,13 @@ func pubsubOperationsWithRebuild(ctx context.Context, cl Redis, conf RedisConfig
 	log.Println("=== Pubsub Operations With Rebuild END ===")
 
 	return errSlice
-
 }
 
 func basicOperations(ctx context.Context, client Redis) []error {
-
 	log.Println("=== Basic Operations START ===")
 
 	var errSlice []error
-	var got = TestUser{
+	got := TestUser{
 		123,
 		"Ifor",
 	}
@@ -211,13 +202,10 @@ func basicOperations(ctx context.Context, client Redis) []error {
 	var expected TestUser
 
 	if result.Err() != nil {
-
 		errSlice = append(errSlice, fmt.Errorf("Get Operations Error: %v", result.Err()))
-
 	} else {
 
 		err = result.Scan(&expected)
-
 		if err != nil {
 			log.Printf("error get: %v", err)
 			errSlice = append(errSlice, fmt.Errorf("Get Operations Error/ Scan: %v", err))
@@ -236,13 +224,11 @@ func basicOperations(ctx context.Context, client Redis) []error {
 	err = client.Del(ctx, "key1")
 	if err != nil {
 		errSlice = append(errSlice, fmt.Errorf("Del Operations error: %v", err))
-
 	}
 
 	result = client.Get(ctx, "key1")
 	if result.Err() == nil {
 		errSlice = append(errSlice, fmt.Errorf("Del Operations get error"))
-
 	}
 	log.Println("=== DEL Operations END ===")
 
@@ -252,7 +238,6 @@ func basicOperations(ctx context.Context, client Redis) []error {
 }
 
 func startTestRedisVar1(ctx context.Context) (RedisConfig, func(), error) {
-
 	log.Println("=== START: startTestRedisVar1 ===")
 
 	req := testcontainers.ContainerRequest{

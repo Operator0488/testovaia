@@ -8,9 +8,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/redis"
 )
 
-var (
-	redisComponent = NewComponent("redis", initRedisClient, Noop)
-)
+var redisComponent = NewComponent("redis", initRedisClient, Noop)
 
 func WithRedis() Option {
 	return func(app *Application) error {

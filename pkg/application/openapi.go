@@ -12,9 +12,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
 )
 
-var (
-	openapiComponent = NewComponent("openapi", initOpenAPI, Noop)
-)
+var openapiComponent = NewComponent("openapi", initOpenAPI, Noop)
 
 // RegisterFn — функция, которую сервис передаёт для регистрации своих HTTP-хендлеров на mux.
 // ctx содержит DI-контейнер, что позволяет использовать di.Resolve для получения зависимостей.

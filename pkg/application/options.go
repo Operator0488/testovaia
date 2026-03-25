@@ -7,9 +7,7 @@ import (
 
 type Option func(app *Application) error
 
-var (
-	ErrComponentAlreadyExist = errors.New("component already exist")
-)
+var ErrComponentAlreadyExist = errors.New("component already exist")
 
 func WithComponent(name string, init, run ComponentFunc) Option {
 	return func(app *Application) error {

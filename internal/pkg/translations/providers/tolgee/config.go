@@ -12,9 +12,7 @@ const (
 	defaultHost = "tolgee:8089"
 )
 
-var (
-	ErrDisabled = errors.New("tolgee disabled")
-)
+var ErrDisabled = errors.New("tolgee disabled")
 
 type Config struct {
 	Host      string

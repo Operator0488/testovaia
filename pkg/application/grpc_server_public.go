@@ -2,15 +2,15 @@ package application
 
 import (
 	"context"
+	"fmt"
+
 	grpcserver "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	"fmt"
+
 	"google.golang.org/grpc"
 )
 
-var (
-	grpcPublicServerComponent = NewComponent("grpc-public-server", initPublicGrpcServer, runPublicGrpcServer)
-)
+var grpcPublicServerComponent = NewComponent("grpc-public-server", initPublicGrpcServer, runPublicGrpcServer)
 
 func (a *Application) addPublicGrpcServer() {
 	if a.PublicGrpcServer != nil {
@@ -45,6 +45,7 @@ func WithPublicGrpcUnaryInterceptor(i grpc.UnaryServerInterceptor) Option {
 		return nil
 	}
 }
+
 func WithPublicGrpcStreamInterceptor(i grpc.StreamServerInterceptor) Option {
 	return func(app *Application) error {
 		app.PublicGrpcServer.AddStreamInterceptor(i)

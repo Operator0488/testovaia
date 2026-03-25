@@ -2,8 +2,9 @@ package interceptors
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
@@ -32,7 +33,6 @@ func MetricsStreamInterceptor() grpc.StreamClientInterceptor {
 		start := time.Now()
 
 		clientStream, err := streamer(ctx, desc, cc, method, opts...)
-
 		if err != nil {
 			duration := time.Since(start).Seconds()
 			statusCode := status.Code(err)

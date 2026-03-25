@@ -2,10 +2,12 @@ package redis
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"fmt"
-	goRedis "github.com/redis/go-redis/v9"
 	"sync"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
+
+	goRedis "github.com/redis/go-redis/v9"
 )
 
 const buffchan = 100
@@ -36,7 +38,6 @@ func (s *subscriber) Channel() <-chan *Message {
 }
 
 func (s *subscriber) Close() error {
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -57,7 +58,6 @@ func (s *subscriber) Close() error {
 }
 
 func (c *client) Subscribe(ctx context.Context, channels ...string) (Subscriber, error) {
-
 	ps := c.universal().Subscribe(ctx, channels...)
 
 	// ждем подтверждения подписки
@@ -80,10 +80,10 @@ func (c *client) Subscribe(ctx context.Context, channels ...string) (Subscriber,
 		cancel:      cancel,
 	}
 
-	//регистрируем подписчика в клиенте
+	// регистрируем подписчика в клиенте
 	c.registerSubscriber(sub)
 
-	//запускаем пересылку сообщений
+	// запускаем пересылку сообщений
 	go sub.forwardMessages()
 
 	c.touchActivity()
@@ -108,7 +108,6 @@ func (c *client) unregisterSubscriber(sub *subscriber) {
 }
 
 func (s *subscriber) forwardMessages() {
-
 	for {
 		select {
 		case msg, ok := <-s.pubsub.Channel():
@@ -134,11 +133,9 @@ func (s *subscriber) forwardMessages() {
 			return
 		}
 	}
-
 }
 
 func (s *subscriber) resubscribe(ctx context.Context, newClient goRedis.UniversalClient) error {
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -146,7 +143,7 @@ func (s *subscriber) resubscribe(ctx context.Context, newClient goRedis.Universa
 		return nil
 	}
 
-	//сохраняем старые информацию
+	// сохраняем старые информацию
 	oldCancel := s.cancel
 	oldPubsub := s.pubsub
 
@@ -161,20 +158,20 @@ func (s *subscriber) resubscribe(ctx context.Context, newClient goRedis.Universa
 		return fmt.Errorf("subscribe to %v: %w", s.channels, err)
 	}
 
-	//создаем новый контекст для новой горутины
+	// создаем новый контекст для новой горутины
 	newCtx, newCancel := context.WithCancel(context.Background())
 
-	//заменяем все
+	// заменяем все
 	s.pubsub = newPubsub
 	s.ctx = newCtx
 	s.cancel = newCancel
 
-	//запускаем НОВУЮ горутину пересылки
+	// запускаем НОВУЮ горутину пересылки
 	go s.forwardMessages()
 
-	//останавливаем СТАРУЮ горутину
+	// останавливаем СТАРУЮ горутину
 	go func() {
-		//отменяем старый контекст - остановит старую forwardMessages()
+		// отменяем старый контекст - остановит старую forwardMessages()
 		oldCancel()
 		// Закрываем старый pubsub
 		_ = oldPubsub.Close()
@@ -188,7 +185,6 @@ func (s *subscriber) resubscribe(ctx context.Context, newClient goRedis.Universa
 }
 
 func (s *subscriber) updatePubsub(newPubsub *goRedis.PubSub) {
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

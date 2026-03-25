@@ -16,9 +16,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-var (
-	localizeComponent = NewComponent("localize", initLocalizeClient, Noop)
-)
+var localizeComponent = NewComponent("localize", initLocalizeClient, Noop)
 
 const (
 	localizePath              = "./bootstrap"
@@ -59,7 +57,8 @@ func initLocalizeClient(ctx context.Context, app *Application) error {
 func initLocalizeTolgee(
 	ctx context.Context,
 	app *Application,
-	fromProvider translations.Loader) {
+	fromProvider translations.Loader,
+) {
 	tConfig := config.NewConfigWatcher("tolgee", app.Env, tolgee.NewConfig)
 	if err := tConfig.Get().Validate(); err != nil {
 		if err == tolgee.ErrDisabled {
@@ -98,7 +97,6 @@ func getAvailableLangs(
 	ctx context.Context,
 	tolgeeClient *tolgee.Client,
 ) []string {
-
 	langs, err := tolgeeClient.GetLanguages(ctx)
 	if err != nil {
 		logger.Error(ctx, "failed to load languages from tolgee", logger.Err(err))

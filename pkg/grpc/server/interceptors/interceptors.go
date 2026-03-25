@@ -2,10 +2,11 @@ package interceptors
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"fmt"
 	"runtime/debug"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"google.golang.org/grpc"

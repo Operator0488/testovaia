@@ -111,7 +111,6 @@ func getStringOrDefault(value string, def string) string {
 // metrics
 
 func (a *appConfig) GetMetricsAddr() string {
-
 	if addr := a.GetString(envMetricsAddr); addr != "" {
 		return addr
 	}

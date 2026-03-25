@@ -2,14 +2,13 @@ package application
 
 import (
 	"context"
+	"fmt"
+
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
-	"fmt"
 )
 
-var (
-	swaggerComponent = NewComponent("swagger", initSwagger, Noop)
-)
+var swaggerComponent = NewComponent("swagger", initSwagger, Noop)
 
 // WithSwagger — включаем компонент
 func WithSwagger(spec []byte) Option {

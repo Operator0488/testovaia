@@ -3,13 +3,14 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"github.com/segmentio/kafka-go"
 )

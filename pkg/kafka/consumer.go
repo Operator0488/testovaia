@@ -2,9 +2,10 @@ package kafka
 
 import (
 	"context"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 	"fmt"
 	"time"
+
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"github.com/segmentio/kafka-go"
@@ -16,10 +17,12 @@ const (
 	collectMetricsInterval   = 5 * time.Second
 )
 
-type Message = kafka.Message
-type ReaderConfig = kafka.ReaderConfig
-type ConsumeHandler func(ctx context.Context, msg Message) error
-type consumeMiddleware func(ctx context.Context, msg Message, next ConsumeHandler) error
+type (
+	Message           = kafka.Message
+	ReaderConfig      = kafka.ReaderConfig
+	ConsumeHandler    func(ctx context.Context, msg Message) error
+	consumeMiddleware func(ctx context.Context, msg Message, next ConsumeHandler) error
+)
 
 // reader is a minimal interface implemented by *kafka.reader that the consumer depends on.
 type reader interface {
@@ -139,7 +142,6 @@ func (c *consumer) Init(
 	dialer *dialer,
 	brokers []string,
 ) error {
-
 	c.config.Brokers = brokers
 	c.config.Dialer = dialer
 	c.reader = kafka.NewReader(c.config)

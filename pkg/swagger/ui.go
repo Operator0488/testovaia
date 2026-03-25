@@ -34,7 +34,6 @@ func (m *Manager) Add(r Registrar) {
 }
 
 func (m *Manager) Middleware(ctx context.Context) (func(http.HandlerFunc) http.HandlerFunc, error) {
-
 	gw := runtime.NewServeMux()
 	for _, r := range m.regs {
 		if err := r(ctx, gw); err != nil {

@@ -9,9 +9,7 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 )
 
-var (
-	kafkaComponent = NewComponent("kafka", initKafkaClient, runKafkaClient)
-)
+var kafkaComponent = NewComponent("kafka", initKafkaClient, runKafkaClient)
 
 // WithKafka add kafka client component, available
 func WithKafka() Option {

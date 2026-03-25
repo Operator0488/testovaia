@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
-	//goRedis "github.com/redis/go-redis/v9"
+	// goRedis "github.com/redis/go-redis/v9"
 )
 
 // интервал пинга в секундах
@@ -32,7 +32,6 @@ func newHealthLoop() *healthLoop {
 }
 
 func (h *healthLoop) start(ctx context.Context, c *client) {
-
 	// Пинговать редис раз в interval
 	// если редис недавно использовали, то скип
 	// если пинг успешен, то обновить lastOk и latency
@@ -43,7 +42,6 @@ func (h *healthLoop) start(ctx context.Context, c *client) {
 	defer ticker.Stop()
 
 	for {
-
 		select {
 
 		case <-ctx.Done():
@@ -66,7 +64,7 @@ func (h *healthLoop) start(ctx context.Context, c *client) {
 				)
 			} else {
 				h.ok.Store(true)
-				//h.err.Store(error(nil)) (ошибка, nil будет выдавать ошибку в Value)
+				// h.err.Store(error(nil)) (ошибка, nil будет выдавать ошибку в Value)
 				h.lat.Store(time.Since(start).Microseconds())
 				logger.Debug(ctx, "redis health check ok",
 					logger.Duration("latency", time.Since(start)),
@@ -82,7 +80,6 @@ func (c *client) latency() time.Duration {
 }
 
 func (c *client) snapshot() Health {
-
 	if c.health.ok.Load() {
 		return Health{
 			OK:      true,
@@ -107,7 +104,6 @@ func (c *client) snapshot() Health {
 }
 
 func (c *client) HealthCheck(_ context.Context) error {
-
 	snap := c.snapshot()
 	if snap.OK {
 		return nil
@@ -118,5 +114,4 @@ func (c *client) HealthCheck(_ context.Context) error {
 	}
 
 	return fmt.Errorf("redis unhealthy, latency=%v", snap.Latency)
-
 }

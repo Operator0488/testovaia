@@ -12,7 +12,7 @@ var (
 		[]string{"command"},
 	)
 
-	//open, idle, in_use
+	// open, idle, in_use
 	RedisConnections = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "redis_connections",

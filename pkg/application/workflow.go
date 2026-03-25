@@ -2,14 +2,13 @@ package application
 
 import (
 	"context"
+	"errors"
+
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/di"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/workflow"
-	"errors"
 )
 
-var (
-	workflowComponent = NewComponent("workflow", initWorkflow, runWorkflow)
-)
+var workflowComponent = NewComponent("workflow", initWorkflow, runWorkflow)
 
 func WithWorkflow() Option {
 	return func(app *Application) error {
