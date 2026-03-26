@@ -371,7 +371,6 @@ make generate-check
 ### Пример использования Postgres
 
 ```go
-
 	// main.go
 	ctx := context.Background()
 
@@ -384,99 +383,85 @@ make generate-check
 		return
 	}
 
-
 	// старт приложения
 	app.Run()
-
 
 	// repository.go
 
 	type userRepo struct {
-		Client
+		db.DbClient
 	}
 
-	// Использование DB(ctx)
-	func (u *userRepo) GetUser(ctx context.Context, id string) (*domain.User, error) {
+	func NewUserRepo(c db.DbClient) *userRepo {
+		return &userRepo{DbClient: c}
+	}
+
+	func (r *userRepo) GetUser(ctx context.Context, id int) (*domain.User, error) {
 		var user domain.User
-		err := u.DB(ctx).First(&user, id).Error
+		err := r.QueryRow(ctx, "SELECT id, name FROM users WHERE id = $1", id).Scan(&user.ID, &user.Name)
 		return &user, err
 	}
 
-	func (u *userRepo) CreateUser(ctx context.Context, user *domain.User) error {
-		return u.DB(ctx).Create(user).Error
+	func (r *userRepo) CreateUser(ctx context.Context, name string) error {
+		_, err := r.Exec(ctx, "INSERT INTO users (name) VALUES ($1)", name)
+		return err
 	}
-
-	// Получение зависимости через di
-	func (u *userRepo) ResolveDeps(client Client) {
-		u.Client = client
-	}
-
 ```
 
 ### Пример использования Postgres в транзакции
 
-
-
 ```go
-
 	// user_repo.go
 
 	type userRepo struct {
-		Client
+		db.DbClient
 	}
 
-	func (u *userRepo) CreateUser(ctx context.Context, user *domain.User) error {
-		return u.DB(ctx).Create(user).Error
+	func NewUserRepo(c db.DbClient) *userRepo {
+		return &userRepo{DbClient: c}
 	}
 
-	// Получение зависимости через di
-	func (u *userRepo) ResolveDeps(client Client) {
-		u.Client = client
+	func (r *userRepo) CreateUser(ctx context.Context, name string) error {
+		_, err := r.Exec(ctx, "INSERT INTO users (name) VALUES ($1)", name)
+		return err
 	}
 
 	// role_repo.go
 
 	type roleRepo struct {
-		Client
+		db.DbClient
 	}
 
-	func (u *userRepo) CreateRole(ctx context.Context, user *domain.Role) error {
-		return u.DB(ctx).Create(user).Error
+	func NewRoleRepo(c db.DbClient) *roleRepo {
+		return &roleRepo{DbClient: c}
 	}
 
-	// Получение зависимости через di
-	func (u *userRepo) ResolveDeps(client Client) {
-		u.Client = client
+	func (r *roleRepo) CreateRole(ctx context.Context, name string) error {
+		_, err := r.Exec(ctx, "INSERT INTO roles (name) VALUES ($1)", name)
+		return err
 	}
 
 	// user_service.go
 
 	type userService struct {
-		Client
-		users IUsersRepo
-		roles IRolesRepo
+		db.DbClient
+		users *userRepo
+		roles *roleRepo
 	}
 
-	// Транзакционное создание роли и пользователя при передаче контекста tctx
-	func (u *userService) CreateUserWithRole(ctx context.Context, user *domain.Role, role *domain.Role) error {
-		return u.WithTransaction(ctx, func(tctx context.Context) error { // при возврате ошибки транзакция будет отменена
-			if err:=u.roles.CreateRole(tctx, role);err!=nil {
+	// Транзакционное создание роли и пользователя — при передаче tctx
+	// репозитории автоматически выполняют запросы в транзакции.
+	func (s *userService) CreateUserWithRole(ctx context.Context, name, role string) error {
+		return s.WithTransaction(ctx, func(tctx context.Context) error {
+			if err := s.roles.CreateRole(tctx, role); err != nil {
 				return err
 			}
-			if err:=u.roles.CreateUser(tctx, user);err!=nil {
-				return err 
+			if err := s.users.CreateUser(tctx, name); err != nil {
+				return err
 			}
 			return nil
 		})
 	}
-
-	// Получение зависимостей через di
-	func (u *userService) ResolveDeps(client Client, u IUsersRepo, r IRolesRepo) {
-		u.Client = client
-		u.users = u
-		u.roles = r
-	}
-
 ```
 
 ### Пример регистрации в gracefull shutdown кастомных компонентов
