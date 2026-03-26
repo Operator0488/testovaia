@@ -29,10 +29,11 @@ type Manager interface {
 }
 
 // DbClient — публичный интерфейс для сервисов (через DI).
-// Объединяет выполнение запросов (Querier) и управление транзакциями (TxManager).
 type DbClient interface {
-	Querier
-	TxManager
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error
 	// Pool возвращает *pgxpool.Pool для операций, которым нужен именно пул (CopyFrom, Acquire и т.д.)
 	Pool() *pgxpool.Pool
 }
@@ -58,14 +59,23 @@ func (m *manager) DB() DbClient {
 }
 
 func (m *manager) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	if tx := txFromContext(ctx); tx != nil {
+		return tx.Exec(ctx, sql, args...)
+	}
 	return m.pool.Exec(ctx, sql, args...)
 }
 
 func (m *manager) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	if tx := txFromContext(ctx); tx != nil {
+		return tx.Query(ctx, sql, args...)
+	}
 	return m.pool.Query(ctx, sql, args...)
 }
 
 func (m *manager) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if tx := txFromContext(ctx); tx != nil {
+		return tx.QueryRow(ctx, sql, args...)
+	}
 	return m.pool.QueryRow(ctx, sql, args...)
 }
 

@@ -27,18 +27,19 @@ func initPostgresClient(ctx context.Context, app *Application) error {
 		return err
 	}
 
-	app.dbManager = manager
 	app.DB = manager.DB()
-	di.Register[db.DbClient](ctx, manager.DB())  // полный клиент
-	di.Register[db.Querier](ctx, manager.DB())   // для репозиториев
-	di.Register[db.TxManager](ctx, manager.DB()) // для сервисов
+	di.Register[db.DbClient](ctx, manager.DB()) // полный клиент
 	return nil
 }
 
 func runPostgresClient(ctx context.Context, app *Application) error {
-	manager := app.dbManager
-	if manager == nil {
-		return fmt.Errorf("app.dbManager not initialized")
+	if app.DB == nil {
+		return fmt.Errorf("app.DB not initialized")
+	}
+
+	manager, ok := app.DB.(db.Manager)
+	if !ok {
+		return fmt.Errorf("app.DB does not implement db.Manager")
 	}
 
 	if err := manager.Connect(ctx); err != nil {
