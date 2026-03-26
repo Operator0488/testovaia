@@ -3,30 +3,32 @@ package db
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // txCtxKey — ключ контекста для хранения транзакции
 type txCtxKey struct{}
 
-// TxFromContext извлекает Querier транзакции из контекста.
+// txFromContext извлекает транзакцию из контекста.
 // Возвращает nil, если транзакции нет.
-func TxFromContext(ctx context.Context) Querier {
-	tx, _ := ctx.Value(txCtxKey{}).(Querier)
+func txFromContext(ctx context.Context) pgx.Tx {
+	tx, _ := ctx.Value(txCtxKey{}).(pgx.Tx)
 	return tx
 }
 
 // contextWithTx помещает транзакцию в контекст
-func contextWithTx(ctx context.Context, tx Querier) context.Context {
+func contextWithTx(ctx context.Context, tx pgx.Tx) context.Context {
 	return context.WithValue(ctx, txCtxKey{}, tx)
 }
 
 // WithTransaction выполняет fn в транзакции.
-// Транзакция помещается в контекст — репозитории, использующие BaseRepository.Querier(ctx),
-// автоматически будут выполнять запросы в этой транзакции.
+// Транзакция помещается в контекст — методы Exec/Query/QueryRow автоматически
+// выполняют запросы в этой транзакции.
 // Возвращает ErrNestedTransaction, если в контексте уже есть транзакция.
 // Если fn возвращает nil — commit, иначе — rollback.
 func (m *manager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
-	if TxFromContext(ctx) != nil {
+	if txFromContext(ctx) != nil {
 		return ErrNestedTransaction
 	}
 

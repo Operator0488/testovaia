@@ -19,47 +19,47 @@ import (
 // --- Два репозитория ---
 
 type userRepo struct {
-	db.BaseRepository
+	db.DbClient
 }
 
-func newUserRepo(q db.Querier) *userRepo {
-	return &userRepo{BaseRepository: db.NewBaseRepository(q)}
+func newUserRepo(c db.DbClient) *userRepo {
+	return &userRepo{DbClient: c}
 }
 
 func (r *userRepo) Create(ctx context.Context, name string) error {
-	_, err := r.Querier(ctx).Exec(ctx, "INSERT INTO users (name) VALUES ($1)", name)
+	_, err := r.Exec(ctx, "INSERT INTO users (name) VALUES ($1)", name)
 	return err
 }
 
 func (r *userRepo) Count(ctx context.Context) (int, error) {
 	var count int
-	err := r.Querier(ctx).QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+	err := r.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
 	return count, err
 }
 
 type orderRepo struct {
-	db.BaseRepository
+	db.DbClient
 }
 
-func newOrderRepo(q db.Querier) *orderRepo {
-	return &orderRepo{BaseRepository: db.NewBaseRepository(q)}
+func newOrderRepo(c db.DbClient) *orderRepo {
+	return &orderRepo{DbClient: c}
 }
 
 func (r *orderRepo) Create(ctx context.Context, userID int, amount int) error {
-	_, err := r.Querier(ctx).Exec(ctx, "INSERT INTO orders (user_id, amount) VALUES ($1, $2)", userID, amount)
+	_, err := r.Exec(ctx, "INSERT INTO orders (user_id, amount) VALUES ($1, $2)", userID, amount)
 	return err
 }
 
 func (r *orderRepo) Count(ctx context.Context) (int, error) {
 	var count int
-	err := r.Querier(ctx).QueryRow(ctx, "SELECT count(*) FROM orders").Scan(&count)
+	err := r.QueryRow(ctx, "SELECT count(*) FROM orders").Scan(&count)
 	return count, err
 }
 
-// --- Сервис: два репозитория + TxManager ---
+// --- Сервис: два репозитория + DbClient ---
 
 type orderService struct {
-	db.TxManager
+	db.DbClient
 	users  *userRepo
 	orders *orderRepo
 }
@@ -149,9 +149,9 @@ func TestTransaction_TwoRepos_CommitOnSuccess(t *testing.T) {
 
 	client := db.NewDbClient(pool)
 	svc := &orderService{
-		users:     newUserRepo(client),
-		orders:    newOrderRepo(client),
-		TxManager: client,
+		users:    newUserRepo(client),
+		orders:   newOrderRepo(client),
+		DbClient: client,
 	}
 
 	err = svc.CreateUserWithOrder(ctx, "Alice", 100)
@@ -175,9 +175,9 @@ func TestTransaction_TwoRepos_RollbackOnError(t *testing.T) {
 
 	client := db.NewDbClient(pool)
 	svc := &orderService{
-		users:     newUserRepo(client),
-		orders:    newOrderRepo(client),
-		TxManager: client,
+		users:    newUserRepo(client),
+		orders:   newOrderRepo(client),
+		DbClient: client,
 	}
 
 	err = svc.CreateUserWithOrderAndFail(ctx, "Alice", 100)
