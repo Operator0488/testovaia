@@ -53,8 +53,9 @@ func (m *manager) runMigration(ctx context.Context) (int, error) {
 	dsn := m.buildDSN()
 
 	res, err := client.MigrateApply(ctx, &atlasexec.MigrateApplyParams{
-		URL:       dsn,
-		ExecOrder: atlasexec.ExecOrderNonLinear, // порядок не линейный
+		URL:        dsn,
+		ExecOrder:  atlasexec.ExecOrderNonLinear, // порядок не линейный
+		AllowDirty: true,                         // Yandex Managed PostgreSQL создаёт служебную схему metric_helpers, которая ломает проверку чистоты БД
 	})
 	if err != nil {
 		return 0, err
