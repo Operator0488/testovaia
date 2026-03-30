@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -15,6 +14,8 @@ func (m *manager) Connect(ctx context.Context) error {
 		return fmt.Errorf("parse pool config: %w", err)
 	}
 	poolConfig.MaxConnLifetime = m.config.ConnMaxLifetime
+	poolConfig.MaxConns = int32(m.config.MaxOpenConns)
+	poolConfig.MinConns = int32(m.config.MaxIdleConns)
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
@@ -58,8 +59,6 @@ func (m *manager) buildDSN() string {
 
 	query := u.Query()
 	query.Set("sslmode", m.config.SSLMode)
-	query.Set("pool_max_conns", strconv.Itoa(m.config.MaxOpenConns))
-	query.Set("pool_min_conns", strconv.Itoa(m.config.MaxIdleConns))
 	u.RawQuery = query.Encode()
 
 	return u.String()
