@@ -9,6 +9,7 @@ require (
 	github.com/camunda/zeebe/clients/go/v8 v8.5.25
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/go-redis/redismock/v9 v9.2.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2
 	github.com/hashicorp/vault/api v1.21.0
