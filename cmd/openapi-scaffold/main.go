@@ -11,26 +11,34 @@ import (
 func main() {
 	cfg := generator.Config{}
 
-	flag.StringVar(&cfg.SpecPath, "spec", "", "Path to OpenAPI spec file")
+	flag.StringVar(&cfg.SpecPath, "spec", "", "Path to single OpenAPI spec")
 	flag.StringVar(&cfg.GenPackage, "gen-package", "", "Relative path to generated package")
 	flag.StringVar(&cfg.HandlerDir, "handler-dir", "", "Relative path to handler directory")
 	flag.StringVar(&cfg.ServiceRoot, "service-root", "", "Service root directory")
-
+	flag.StringVar(&cfg.APIDir, "api-dir", "", "Directory with OpenAPI specs (batch mode)")
+	flag.BoolVar(&cfg.Check, "check", false, "CI mode: verify files are up to date")
 	flag.Parse()
 
-	if cfg.SpecPath == "" || cfg.GenPackage == "" || cfg.HandlerDir == "" || cfg.ServiceRoot == "" {
-		flag.Usage()
-		os.Exit(1)
+	if cfg.SpecPath != "" {
+		err := generator.RunSingle(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "openapi-scaffold: %v\n", err)
+			os.Exit(1)
+		}
+
+		return
 	}
 
-	gen, err := generator.NewGenerator(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "openapi-scaffold: %v\n", err)
-		os.Exit(1)
+	if cfg.APIDir != "" {
+		err := generator.RunBatch(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "openapi-scaffold: %v\n", err)
+			os.Exit(1)
+		}
+
+		return
 	}
 
-	if err := gen.Generate(); err != nil {
-		fmt.Fprintf(os.Stderr, "openapi-scaffold: %v\n", err)
-		os.Exit(1)
-	}
+	flag.Usage()
+	os.Exit(1)
 }

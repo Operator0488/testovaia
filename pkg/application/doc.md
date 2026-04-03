@@ -26,18 +26,17 @@
 
 Все middleware применяются автоматически к HTTP-серверу в следующем порядке:
 
-1. **Panic Recovery** — перехватывает панику, возвращает JSON в формате Envelope с HTTP 500. Детали паники логируются для поиска в логах.
+1. **Panic Recovery** — перехватывает панику, возвращает JSON-ошибку с HTTP 500 в том же формате, что и остальные ошибки платформы (реализация — `internal/pkg/response`). Детали паники логируются для поиска в логах.
 2. **HTTP Metrics** — Prometheus метрики: `http_requests_total`, `http_request_duration_seconds` с лейблами method/path/status_code.
 3. **Liveness** `/healthz/live` — возвращает 200 если httpServer жив.
 4. **Readiness** `/healthz/ready` — проверяет что приложение перешло в состояние `started`.
 
 При использовании `WithOpenAPI` дополнительно подключаются:
 
-5. **Envelope** — оборачивает успешные (2xx) JSON-ответы в единую структуру `{ "payload": <DTO>, "error": null }`. Ошибки (4xx/5xx) возвращаются в формате `{ "payload": null, "error": { "traceId": "...", "message": "..." } }`. Служебные пути (/healthz, /metrics, /swagger) не оборачиваются.
-6. **Swagger UI** — `/swagger/` отдает интерактивную документацию, `/swagger/{name}/openapi.json` — спецификацию. При нескольких спецификациях отображается выпадающий список для выбора.
-7. **Auth** — проверка аутентификации (по умолчанию заглушка с warn-логом).
-8. **Rate Limiter** — ограничение количества запросов (по умолчанию заглушка с warn-логом).
-9. **Validation** — автоматическая валидация запросов по всем OpenAPI-схемам (kin-openapi). При наличии нескольких спецификаций middleware последовательно ищет маршрут в каждой из них.
+5. **Swagger UI** — `/swagger/` отдает интерактивную документацию, `/swagger/{name}/openapi.json` — спецификацию. При нескольких спецификациях отображается выпадающий список для выбора.
+6. **Auth** — проверка аутентификации (по умолчанию заглушка с warn-логом).
+7. **Rate Limiter** — ограничение количества запросов (по умолчанию заглушка с warn-логом).
+8. **Validation** — автоматическая валидация запросов по всем OpenAPI-схемам (kin-openapi). При наличии нескольких спецификаций middleware последовательно ищет маршрут в каждой из них. При ошибке валидации ответ — **HTTP 400** и JSON с полем `error` (сообщение вида `request validation failed: …`).
 
 ##### Пробы для `/healthz/live`
 Возвращает 200 если компонент httpServer жив
@@ -119,7 +118,7 @@ components:
           type: string
 ```
 
-**Шаг 2.** Создайте `cmd/app/main.go`:
+**Шаг 2.** Сгенерируйте с помощью service-template `cmd/app/main.go`:
 
 ```go
 func main() {
@@ -134,73 +133,41 @@ func main() {
 }
 ```
 
-**Шаг 3.** Добавьте `Makefile`:
-
-```makefile
-PLATFORM_PATH  = $(shell go list -m -f '{{.Dir}}' easybnk.gitlab.yandexcloud.net/backend/platform-core)
-SERVICE_ROOT   = $(shell pwd)
-
-.PHONY: generate generate-check
-
-generate:
-	bash $(PLATFORM_PATH)/scripts/openapi-generate.sh $(SERVICE_ROOT)/api/openapi $(SERVICE_ROOT)
-
-generate-check:
-	CHECK=1 bash $(PLATFORM_PATH)/scripts/openapi-generate.sh $(SERVICE_ROOT)/api/openapi $(SERVICE_ROOT)
-```
-
-**Шаг 4.** Запустите генерацию:
+**Шаг 3.** Запустите генерацию http хэндлеров:
 
 ```bash
-make generate
+make generate-api
 ```
 
-Скрипт создаёт всё необходимое:
-
-```
-myservice/
-├── api/
-│   └── openapi/
-│       ├── items.yaml                           # ВЫ СОЗДАЛИ
-│       └── embed.gen.go                         # ВЫ СОЗДАЛИ (с помощью service-template)
-├── cmd/app/
-│   └── main.go                                  # ВЫ СОЗДАЛИ (с помощью service-template)
-├── internal/
-│   ├── api/items/
-│   │   └── api.gen.go                           # СГЕНЕРИРОВАНО: типы, интерфейсы, роутер
-│   └── handler/
-│       ├── register.go                          # СГЕНЕРИРОВАНО: агрегатор всех хэндлеров
-│       └── items/
-│           ├── handler.go                       # СГЕНЕРИРОВАНО: ItemsHandler с заглушками
-│           └── register.gen.go                  # СГЕНЕРИРОВАНО: регистрация на mux
-└── Makefile
-```
-
-Имя структуры хэндлера (`ItemsHandler`) извлекается из `info.title` спецификации:
-- `"Items API"` → `ItemsHandler`
-- `"User Management API"` → `UserManagementHandler`
-
-**Шаг 5.** Реализуйте бизнес-логику — замените `todo: implement me` в `internal/handler/items/handler.go`:
+**Шаг 4.** Реализуйте структуру и методы хэндлера в пакете рядом с `handler.gen.go`. Генератор использует режим **std-http-server** (`oapi-codegen`): сигнатуры методов — `(w http.ResponseWriter, r *http.Request, …)` плюс типы параметров из спецификации. Удобно возвращать результат обработки как `pkg/httpresp.Response[T]` и отдавать ответ через `httpresp.Handle`:
 
 ```go
-func (h *ItemsHandler) GetItemById(ctx context.Context, req gen.GetItemByIdRequestObject) (gen.GetItemByIdResponseObject, error) {
-    return gen.GetItemById200JSONResponse{Id: &req.Id, Name: ptr("Widget")}, nil
+import (
+	"context"
+	"net/http"
+
+	response "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/httpresp"
+	gen "example.com/items/internal/api/items"
+)
+
+func (h *ItemsHandler) GetItemById(w http.ResponseWriter, r *http.Request, id gen.ItemId) {
+	res := h.getItem(r.Context(), id)
+	response.Handle(r.Context(), w, r, res)
+}
+
+func (h *ItemsHandler) getItem(ctx context.Context, id gen.ItemId) response.Response[gen.ItemResponseFullData] {
+	// бизнес-логика; при ошибке — response.NotFound[gen.ItemResponseFullData]("item"), response.Internal(err) и т.д.
+	return response.Ok(gen.ItemResponseFullData{Payload: gen.Item{Id: id, Name: "Widget"}})
 }
 ```
 
+Имена типов (`ItemId`, `Item`, `ItemResponseFullData`) в вашем сервисе будут другими — ориентируйтесь на сгенерированный `api.gen.go`.
+
+Сгенерированный `register.gen.go` подключает `httpresp.JSONErrorHandler` как `ErrorHandlerFunc` у oapi-codegen (ошибки привязки параметров запроса уходят клиенту в том же JSON-формате `error`).
+
 #### Повторная генерация
 
-При повторном запуске `make generate`:
-- `internal/api/*/api.gen.go` — перегенерируется всегда
-- `internal/handler/register.gen.go` — перегенерируется всегда (агрегатор, подхватывает новые спецификации)
-- `internal/handler/*/handler.go` — **НЕ перезаписывается**, чтобы не потерять бизнес-логику
-- `internal/handler/*/register.go` — **НЕ перезаписывается**
-
-Если в спецификации появились новые операции, скрипт выведет предупреждение:
-```
-WARNING: handler.go is missing methods: DeleteItem
-Add them manually or delete the file and re-run the scaffold.
-```
+При повторном запуске `make generate-api` ранее сгенерированные файлы перезаписываются:
 
 #### Несколько спецификаций
 
@@ -220,35 +187,15 @@ internal/
 │   └── users/api.gen.go
 └── handler/
     ├── register.gen.go          # автоматически вызывает items.Register + users.Register
-    ├── items/handler.go
-    └── users/handler.go
+    ├── items/handler.gen.go
+    └── users/handler.gen.go
 ```
 
 Swagger UI на `/swagger/` покажет выпадающий список для выбора спецификации.
 
-#### Кастомизация register.go
-
-Сгенерированный `register.go` внутри `internal/handler/{name}/` можно доработать:
-
-```go
-// internal/handler/items/register.go
-package items
-
-func Register(ctx context.Context, mux *http.ServeMux) {
-    db := di.Resolve[db.DbClient](ctx)
-    repo := repository.New(db)
-    h := &ItemsHandler{repo: repo}
-    gen.HandlerFromMux(gen.NewStrictHandler(h, nil), mux)
-}
-```
-
-При повторной генерации этот файл не будет перезаписан.
-
 #### Конфигурация генератора
 
-Конфигурация `oapi-codegen` хранится централизованно в platform-core (`pkg/openapi/codegen/cfg.yaml`).
-Сервисы не содержат собственных конфигурационных файлов генератора — это обеспечивает
-единообразие настроек генерации и исключает расхождения между сервисами.
+Параметры вызова `oapi-codegen` для сервисов задаются в platform-core в пакете **`internal/pkg/generator`** (см. `codegen.go`: `--generate models,std-http-server` и т.д.). Шаблоны заготовок регистрации и хендлеров лежат в **`internal/pkg/generator/templates/`** (`register.tmpl`, `handler.tmpl`, …). Отдельного YAML-конфига `oapi-codegen` в репозитории нет — единообразие обеспечивается общим кодом генератора и шаблонами.
 
 #### Проверка в CI/CD
 
@@ -264,21 +211,23 @@ make generate-check
 - Swagger UI на `/swagger/` (с выбором спецификации при наличии нескольких)
 - Валидация запросов по всем OpenAPI-схемам
 - Panic recovery, метрики, трассировка
-- Единый формат ответов Envelope (см. `pkg/http/response`)
+- Формат ошибок HTTP единый для платформы: в JSON поле **`error`** с **`trace_id`** и **`message`**
 
-#### Формат ответов (pkg/http/response)
+#### Формат HTTP-ответов (OpenAPI / REST)
 
-Все JSON-ответы API используют структуру Envelope:
+**Публичный API для сервисов** — пакет **`pkg/httpresp`**: тип `Response[T]`, функции `Ok` / `Created` / `NoContent`, фабрики ошибок (`BadRequest`, `NotFound`, `Internal`, …), а также **`Handle(ctx, w, r, res)`**, который пишет либо JSON-ошибку, либо успешное тело. Для ошибок с телом запроса в лог уходит `method` и `path` (через `*http.Request`).
+
+**Реализация** записи JSON и типов `HTTPError` — во **`internal/pkg/response`** (из других модулей не импортировать; только код внутри `platform-core`).
+
+Тело ошибки для клиента:
 
 ```json
 {
-  "payload": <DTO>,
-  "error": { "traceId": "guid", "message": "string" }
+  "error": { "trace_id": "…", "message": "…" }
 }
 ```
 
-- Успех: `payload` содержит данные, `error` = null.
-- Ошибка: `payload` = null, `error` содержит traceId и message.
+Успешные ответы сериализуются из типов, сгенерированных по OpenAPI (включая обёртку **`payload`**, если она задана в схеме ответа).
 
 ### Примеры использования Kafka
 
