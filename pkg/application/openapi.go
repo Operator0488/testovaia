@@ -7,12 +7,16 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/http/response"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
+const uuidPattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+
 var openapiComponent = NewComponent("openapi", initOpenAPI, Noop)
+var registerUUIDOnce sync.Once
 
 // RegisterFn — функция, которую сервис передаёт для регистрации своих HTTP-хендлеров на mux.
 // ctx содержит DI-контейнер, что позволяет использовать di.Resolve для получения зависимостей.
@@ -28,7 +32,8 @@ type specFile struct {
 // Автоматически запускает HTTP-сервер
 //
 // Настраивает:
-//   - Middleware валидации запросов по всем спецификациям (kin-openapi)
+//   - Middleware валидации запросов по всем спецификациям (kin-openapi); при ошибке — HTTP 400
+//     и JSON {"error":{"trace_id","message"}} (как у прочих ошибок платформы)
 //   - Swagger UI по пути /swagger с поддержкой выбора спецификации
 //   - Регистрацию обработчиков через RegisterFn
 //   - Auth Middleware
@@ -49,6 +54,10 @@ func WithOpenAPI(apiFS fs.FS, register RegisterFn) Option {
 }
 
 func initOpenAPI(ctx context.Context, app *Application) error {
+	registerUUIDOnce.Do(func() {
+		openapi3.DefineStringFormatValidator("uuid", openapi3.NewRegexpFormatValidator(uuidPattern))
+	})
+
 	specs, err := loadSpecsFromFS(app.apiFS)
 	if err != nil {
 		return fmt.Errorf("openapi: failed to load specs: %w", err)
@@ -76,7 +85,6 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 		return fmt.Errorf("openapi swagger init failed: %w", err)
 	}
 
-	app.middlewares.Add(response.EnvelopeMiddleware)
 	app.middlewares.Add(swaggerMw)
 	app.middlewares.Add(authMiddleware)
 	app.middlewares.Add(rateLimitMiddleware)

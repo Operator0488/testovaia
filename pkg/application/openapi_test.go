@@ -122,7 +122,7 @@ func TestWithOpenAPI_InvalidRequestRejectedByMiddleware(t *testing.T) {
 
 	app.middlewares.Chain()(app.router.ServeHTTP)(rec, req)
 
-	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.False(t, handlerCalled, "handler must not be called when validation fails")
 
 	var resp struct {

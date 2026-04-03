@@ -6,22 +6,15 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
 const permRule = 0o755
-
-type Config struct {
-	SpecPath    string
-	GenPackage  string
-	HandlerDir  string
-	ServiceRoot string
-}
 
 type Generator struct {
 	config      Config
@@ -30,16 +23,84 @@ type Generator struct {
 	modulePath  string
 }
 
-func NewGenerator(cfg Config) (*Generator, error) {
+func RunSingle(cfg Config) error {
+	batchCfg := Config{
+		APIDir:      filepath.Dir(cfg.SpecPath),
+		ServiceRoot: cfg.ServiceRoot,
+		Check:       cfg.Check,
+	}
+
+	return RunBatch(batchCfg)
+}
+
+func RunBatch(cfg Config) error {
+	modulePath, err := getModulePath(cfg.ServiceRoot)
+	if err != nil {
+		return err
+	}
+
+	specs, err := DiscoverSpecs(cfg.APIDir)
+	if err != nil {
+		return err
+	}
+
+	specNames := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		name := strings.TrimSuffix(filepath.Base(spec), filepath.Ext(spec))
+		specNames = append(specNames, name)
+
+		output := fmt.Sprintf("internal/api/%s/api.gen.go", name)
+		if err := os.MkdirAll(filepath.Join(cfg.ServiceRoot, "internal/api/"+name), permRule); err != nil {
+			return err
+		}
+
+		// oapi-codegen
+		if err := RunOapiCodegen(cfg.ServiceRoot, spec, output, name); err != nil {
+			return fmt.Errorf("oapi-codegen for %s: %w", name, err)
+		}
+
+		// scaffold (handler.go + register.gen.go)
+		singleCfg := Config{
+			SpecPath:    spec,
+			GenPackage:  "internal/api/" + name,
+			HandlerDir:  "internal/handler/" + name,
+			ServiceRoot: cfg.ServiceRoot,
+		}
+		gen, err := newGenerator(singleCfg)
+		if err != nil {
+			return err
+		}
+		if err := gen.generate(); err != nil {
+			return err
+		}
+	}
+
+	// Агрегатор
+	if err := GenerateAggregator(cfg.ServiceRoot, modulePath, specNames); err != nil {
+		return err
+	}
+
+	// go fmt
+	exec.Command("go", "fmt", "./internal/handler/...", "./internal/api/...").Run()
+
+	// CI-проверка
+	if cfg.Check {
+		return CICheck(cfg.ServiceRoot)
+	}
+
+	return nil
+}
+
+func newGenerator(cfg Config) (*Generator, error) {
 	handlerName, err := deriveHandlerName(cfg.SpecPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive handler name from spec: %w", err)
 	}
 
 	genFilePath := filepath.Join(cfg.ServiceRoot, cfg.GenPackage, "api.gen.go")
-	methods, err := parseStrictInterface(genFilePath)
+	methods, err := parseServerInterface(genFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse StrictServerInterface from %s: %w", genFilePath, err)
+		return nil, fmt.Errorf("failed to parse ServerInterface from %s: %w", genFilePath, err)
 	}
 
 	modulePath, err := getModulePath(cfg.ServiceRoot)
@@ -55,12 +116,12 @@ func NewGenerator(cfg Config) (*Generator, error) {
 	}, nil
 }
 
-func (g *Generator) Generate() error {
+func (g *Generator) generate() error {
 	handlerPath := filepath.Join(g.config.ServiceRoot, g.config.HandlerDir)
 	genImportPath := g.modulePath + "/" + g.config.GenPackage
 	pkgName := filepath.Base(g.config.HandlerDir)
 
-	if err := generateHandlerFile(handlerPath, pkgName, g.handlerName, g.methods, genImportPath); err != nil {
+	if err := generateHandlerFile(handlerPath, pkgName, g.handlerName, genImportPath, g.methods); err != nil {
 		return fmt.Errorf("failed to generate handler: %w", err)
 	}
 
@@ -122,9 +183,9 @@ func toPascalCase(s string) string {
 	return result.String()
 }
 
-// parseStrictInterface парсит сгенерированный файл и извлекает имена методов
-// из интерфейса StrictServerInterface.
-func parseStrictInterface(filePath string) ([]string, error) {
+// parseServerInterface парсит сгенерированный файл и извлекает имена методов
+// из интерфейса ServerInterface (std-http-server).
+func parseServerInterface(filePath string) ([]string, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, filePath, nil, 0)
 	if err != nil {
@@ -139,7 +200,7 @@ func parseStrictInterface(filePath string) ([]string, error) {
 		}
 		for _, spec := range genDecl.Specs {
 			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || typeSpec.Name.Name != "StrictServerInterface" {
+			if !ok || typeSpec.Name.Name != "ServerInterface" {
 				continue
 			}
 			iType, ok := typeSpec.Type.(*ast.InterfaceType)
@@ -155,7 +216,7 @@ func parseStrictInterface(filePath string) ([]string, error) {
 	}
 
 	if len(methods) == 0 {
-		return nil, fmt.Errorf("StrictServerInterface not found in %s", filePath)
+		return nil, fmt.Errorf("ServerInterface not found in %s", filePath)
 	}
 
 	return methods, nil
@@ -174,142 +235,4 @@ func getModulePath(serviceRoot string) (string, error) {
 	}
 
 	return "", fmt.Errorf("module path not found in go.mod")
-}
-
-var handlerTmpl = template.Must(template.New("handler").Parse(`package {{.Package}}
-
-import (
-	"context"
-
-	gen "{{.GenImport}}"
-)
-
-// {{.HandlerName}} реализует gen.StrictServerInterface.
-type {{.HandlerName}} struct{}
-{{range .Methods}}
-func (h *{{$.HandlerName}}) {{.}}(ctx context.Context, req gen.{{.}}RequestObject) (gen.{{.}}ResponseObject, error) {
-	// todo: implement me
-}
-{{end}}`))
-
-func generateHandlerFile(dir, pkg, handlerName string, methods []string, genImport string) error {
-	handlerPath := filepath.Join(dir, "handler.go")
-
-	if _, err := os.Stat(handlerPath); err == nil {
-		existing, parseErr := findExistingMethods(handlerPath, handlerName)
-		if parseErr != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: could not parse existing %s: %v\n", handlerPath, parseErr)
-
-			return nil
-		}
-
-		existingSet := make(map[string]struct{}, len(existing))
-		for _, e := range existing {
-			existingSet[e] = struct{}{}
-		}
-
-		var missing []string
-		for _, m := range methods {
-			if _, ok := existingSet[m]; !ok {
-				missing = append(missing, m)
-			}
-		}
-
-		if len(missing) > 0 {
-			fmt.Fprintf(os.Stderr, "WARNING: %s is missing methods: %s\n", handlerPath, strings.Join(missing, ", "))
-			fmt.Fprintln(os.Stderr, "Add them manually or delete the file and re-run the scaffold.")
-		} else {
-			fmt.Printf("SKIP: %s already exists and implements all methods\n", handlerPath)
-		}
-
-		return nil
-	}
-
-	if err := os.MkdirAll(dir, permRule); err != nil {
-		return err
-	}
-
-	f, err := os.Create(handlerPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	fmt.Printf("CREATE: %s (handler: %s)\n", handlerPath, handlerName)
-
-	return handlerTmpl.Execute(f, map[string]interface{}{
-		"Package":     pkg,
-		"HandlerName": handlerName,
-		"Methods":     methods,
-		"GenImport":   genImport,
-	})
-}
-
-var registerTmpl = template.Must(template.New("register").Parse(`package {{.Package}}
-
-import (
-	"context"
-	"net/http"
-
-	gen "{{.GenImport}}"
-)
-
-// Register регистрирует все HTTP-обработчики на mux.
-func Register(ctx context.Context, mux *http.ServeMux) {
-	h := &{{.HandlerName}}{}
-	gen.HandlerFromMux(gen.NewStrictHandler(h, nil), mux)
-}
-`))
-
-func generateRegisterFile(dir, pkg, handlerName string, genImport string) error {
-	registerPath := filepath.Join(dir, "register.go")
-
-	if _, err := os.Stat(registerPath); err == nil {
-		fmt.Printf("SKIP: %s already exists\n", registerPath)
-
-		return nil
-	}
-
-	if err := os.MkdirAll(dir, permRule); err != nil {
-		return err
-	}
-
-	f, err := os.Create(registerPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	fmt.Printf("CREATE: %s\n", registerPath)
-
-	return registerTmpl.Execute(f, map[string]interface{}{
-		"Package":     pkg,
-		"HandlerName": handlerName,
-		"GenImport":   genImport,
-	})
-}
-
-func findExistingMethods(filePath, handlerName string) ([]string, error) {
-	fileSet := token.NewFileSet()
-	file, err := parser.ParseFile(fileSet, filePath, nil, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	var methods []string
-	for _, decl := range file.Decls {
-		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok || funcDecl.Recv == nil {
-			continue
-		}
-		for _, field := range funcDecl.Recv.List {
-			if starExpr, ok := field.Type.(*ast.StarExpr); ok {
-				if ident, ok := starExpr.X.(*ast.Ident); ok && ident.Name == handlerName {
-					methods = append(methods, funcDecl.Name.Name)
-				}
-			}
-		}
-	}
-
-	return methods, nil
 }

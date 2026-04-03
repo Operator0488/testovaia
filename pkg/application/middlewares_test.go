@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/http/response"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/response"
 )
 
 var invalidSpec = []byte(`not: valid: yaml: [}`)
@@ -87,7 +87,7 @@ func TestNewMiddleware_MissingRequiredField(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
-	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	var env response.Envelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))

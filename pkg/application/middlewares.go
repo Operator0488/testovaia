@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/middleware"
-	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/http/response"
+	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/response"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
@@ -188,7 +188,15 @@ func (a *Application) panicRecoveryMiddleware(next http.HandlerFunc) http.Handle
 					logger.String("stack", string(debug.Stack())),
 				)
 
-				response.WriteError(w, r, http.StatusInternalServerError, "internal server error")
+				var err error
+				switch v := rec.(type) {
+				case error:
+					err = v
+				default:
+					err = fmt.Errorf("panic: %v", v)
+				}
+
+				response.WriteError(ctx, w, r, response.Internal(err))
 			}
 		}()
 		next(w, r)
@@ -249,6 +257,8 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		defaultAuth.mu.Lock()
 		fn := defaultAuth.fn
 		defaultAuth.mu.Unlock()
@@ -265,7 +275,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if err := fn(r); err != nil {
-			response.WriteError(w, r, http.StatusUnauthorized, "unauthorized")
+			response.WriteError(ctx, w, r, response.Unauthorized())
 
 			return
 		}
@@ -305,13 +315,15 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		ctx := r.Context()
+
 		defaultRateLimit.mu.Lock()
 		fn := defaultRateLimit.fn
 		defaultRateLimit.mu.Unlock()
 
 		if fn == nil {
 			defaultRateLimit.warnOnce.Do(func() {
-				logger.Warn(r.Context(),
+				logger.Warn(ctx,
 					"rate limit middleware is not configured, all requests are allowed",
 				)
 			})
@@ -321,7 +333,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if err := fn(r); err != nil {
-			response.WriteError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
+			response.WriteError(ctx, w, r, response.TooManyRequests())
 
 			return
 		}
@@ -353,8 +365,8 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if err := validateMultiRequest(ctx, r, routerList); err != nil {
-				response.WriteError(w, r, http.StatusUnprocessableEntity,
-					fmt.Sprintf("request validation failed: %s", getReason(err)))
+				response.WriteError(ctx, w, r, response.BadRequest(
+					fmt.Sprintf("request validation failed: %s", getReason(err))))
 
 				return
 			}
