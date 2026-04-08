@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -23,17 +22,17 @@ type SpecEntry struct {
 }
 
 type multiSpecHandler struct {
-	basePath  string
-	jsonSpecs []SpecEntry
-	uiPage    []byte
+	basePath       string
+	externalPrefix string
+	jsonSpecs      []SpecEntry
+	uiPage         []byte
 }
 
 // MultiSpecMiddleware обслуживает Swagger UI для нескольких OpenAPI спецификаций.
-// Каждая спецификация доступна по пути /swagger/{name}/openapi.json.
+// Каждая спецификация доступна по пути https://host:port/{externalPrefix}/swagger/{name}/openapi.json.
 // UI показывает выпадающий список для выбора спецификации.
-// Для одной спецификации также работает обратно-совместимый путь {basePath}/openapi.json.
-func MultiSpecMiddleware(specs []SpecEntry) (func(http.HandlerFunc) http.HandlerFunc, error) {
-	handler, err := newMultiSpecHandler(specs, swaggerPath)
+func MultiSpecMiddleware(specs []SpecEntry, externalPrefix string) (func(http.HandlerFunc) http.HandlerFunc, error) {
+	handler, err := newMultiSpecHandler(specs, externalPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +44,7 @@ func MultiSpecMiddleware(specs []SpecEntry) (func(http.HandlerFunc) http.Handler
 	}, nil
 }
 
-func newMultiSpecHandler(specs []SpecEntry, basePath string) (*multiSpecHandler, error) {
+func newMultiSpecHandler(specs []SpecEntry, externalPrefix string) (*multiSpecHandler, error) {
 	jsonSpecs := make([]SpecEntry, 0, len(specs))
 	for _, s := range specs {
 		j, err := ensureJSON(s.Data)
@@ -55,12 +54,17 @@ func newMultiSpecHandler(specs []SpecEntry, basePath string) (*multiSpecHandler,
 		jsonSpecs = append(jsonSpecs, SpecEntry{Name: s.Name, Data: j})
 	}
 
-	uiPage, err := renderMultiSpecUI(specs, basePath)
+	uiPage, err := renderMultiSpecUI(specs)
 	if err != nil {
 		return nil, fmt.Errorf("swagger: failed to render UI: %w", err)
 	}
 
-	return &multiSpecHandler{basePath: basePath, jsonSpecs: jsonSpecs, uiPage: uiPage}, nil
+	return &multiSpecHandler{
+		basePath:       externalPrefix + swaggerPath,
+		jsonSpecs:      jsonSpecs,
+		uiPage:         uiPage,
+		externalPrefix: externalPrefix,
+	}, nil
 }
 
 func (h *multiSpecHandler) serve(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
@@ -70,14 +74,12 @@ func (h *multiSpecHandler) serve(w http.ResponseWriter, r *http.Request, next ht
 	case p == h.basePath:
 		http.Redirect(w, r, h.basePath+"/", http.StatusMovedPermanently)
 	case p == h.basePath+"/":
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		_, _ = w.Write(h.uiPage)
+		h.serveHTMLSpec(w)
 	case p == h.basePath+"/openapi.json" && len(h.jsonSpecs) == 1:
-		serveJSONSpec(w, h.jsonSpecs[0].Data)
+		h.serveJSONSpec(w, h.jsonSpecs[0].Data)
 	default:
 		if spec, ok := h.findSpec(p); ok {
-			serveJSONSpec(w, spec.Data)
+			h.serveJSONSpec(w, spec.Data)
 
 			return
 		}
@@ -95,14 +97,39 @@ func (h *multiSpecHandler) findSpec(path string) (SpecEntry, bool) {
 	return SpecEntry{}, false
 }
 
-func serveJSONSpec(w http.ResponseWriter, data []byte) {
+func (h *multiSpecHandler) serveHTMLSpec(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	_, _ = w.Write(h.uiPage)
+}
+
+func (h *multiSpecHandler) serveJSONSpec(w http.ResponseWriter, data []byte) {
+	data = h.patchServers(data)
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=60")
-	w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	_, _ = w.Write(data)
 }
 
-func renderMultiSpecUI(specs []SpecEntry, basePath string) ([]byte, error) {
+func (h *multiSpecHandler) patchServers(data []byte) []byte {
+	var spec map[string]any
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return data
+	}
+
+	spec["servers"] = []map[string]any{
+		{"url": h.externalPrefix},
+	}
+
+	patched, err := json.Marshal(spec)
+	if err != nil {
+		return data
+	}
+
+	return patched
+}
+
+func renderMultiSpecUI(specs []SpecEntry) ([]byte, error) {
 	type urlEntry struct {
 		URL  string `json:"url"`
 		Name string `json:"name"`
@@ -111,7 +138,7 @@ func renderMultiSpecUI(specs []SpecEntry, basePath string) ([]byte, error) {
 	urls := make([]urlEntry, 0, len(specs))
 	for _, s := range specs {
 		urls = append(urls, urlEntry{
-			URL:  basePath + "/" + s.Name + "/openapi.json",
+			URL:  "./" + s.Name + "/openapi.json",
 			Name: s.Name,
 		})
 	}
