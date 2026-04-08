@@ -80,7 +80,7 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 		return fmt.Errorf("openapi validation init failed: %w", err)
 	}
 
-	swaggerMw, err := swagger.MultiSpecMiddleware(specEntries)
+	swaggerMw, err := swagger.MultiSpecMiddleware(specEntries, resolveExternalPrefix(app))
 	if err != nil {
 		return fmt.Errorf("openapi swagger init failed: %w", err)
 	}
@@ -132,4 +132,8 @@ func isYAMLFile(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
 
 	return ext == ".yaml" || ext == ".yml"
+}
+
+func resolveExternalPrefix(app *Application) string {
+	return "/api/" + app.config.GetAppName()
 }
