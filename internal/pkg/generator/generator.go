@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
-
-	"github.com/getkin/kin-openapi/openapi3"
 )
 
 const permRule = 0o755
@@ -46,24 +44,23 @@ func RunBatch(cfg Config) error {
 
 	specNames := make([]string, 0, len(specs))
 	for _, spec := range specs {
-		name := strings.TrimSuffix(filepath.Base(spec), filepath.Ext(spec))
-		specNames = append(specNames, name)
+		packageName := derivePackageName(spec)
+		specNames = append(specNames, packageName)
 
-		output := fmt.Sprintf("internal/api/%s/api.gen.go", name)
-		if err := os.MkdirAll(filepath.Join(cfg.ServiceRoot, "internal/api/"+name), permRule); err != nil {
+		output := fmt.Sprintf("internal/api/%s/api.gen.go", packageName)
+		if err := os.MkdirAll(filepath.Join(cfg.ServiceRoot, "internal/api/"+packageName), permRule); err != nil {
 			return err
 		}
 
 		// oapi-codegen
-		if err := RunOapiCodegen(cfg.ServiceRoot, spec, output, name); err != nil {
-			return fmt.Errorf("oapi-codegen for %s: %w", name, err)
+		if err := RunOapiCodegen(cfg.ServiceRoot, spec, output, packageName); err != nil {
+			return fmt.Errorf("oapi-codegen for %s: %w", packageName, err)
 		}
 
-		// scaffold (handler.go + register.gen.go)
+		// scaffold
 		singleCfg := Config{
 			SpecPath:    spec,
-			GenPackage:  "internal/api/" + name,
-			HandlerDir:  "internal/handler/" + name,
+			GenPackage:  "internal/api/" + packageName,
 			ServiceRoot: cfg.ServiceRoot,
 		}
 		gen, err := newGenerator(singleCfg)
@@ -81,7 +78,7 @@ func RunBatch(cfg Config) error {
 	}
 
 	// go fmt
-	exec.Command("go", "fmt", "./internal/handler/...", "./internal/api/...").Run()
+	exec.Command("go", "fmt", "./internal/api/...").Run()
 
 	// CI-проверка
 	if cfg.Check {
@@ -92,11 +89,6 @@ func RunBatch(cfg Config) error {
 }
 
 func newGenerator(cfg Config) (*Generator, error) {
-	handlerName, err := deriveHandlerName(cfg.SpecPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive handler name from spec: %w", err)
-	}
-
 	genFilePath := filepath.Join(cfg.ServiceRoot, cfg.GenPackage, "api.gen.go")
 	methods, err := parseServerInterface(genFilePath)
 	if err != nil {
@@ -110,77 +102,59 @@ func newGenerator(cfg Config) (*Generator, error) {
 
 	return &Generator{
 		config:      cfg,
-		handlerName: handlerName,
+		handlerName: deriveHandlerName(cfg.SpecPath),
 		methods:     methods,
 		modulePath:  modulePath,
 	}, nil
 }
 
 func (g *Generator) generate() error {
-	handlerPath := filepath.Join(g.config.ServiceRoot, g.config.HandlerDir)
+	genPath := filepath.Join(g.config.ServiceRoot, g.config.GenPackage)
 	genImportPath := g.modulePath + "/" + g.config.GenPackage
-	pkgName := filepath.Base(g.config.HandlerDir)
+	pkgName := filepath.Base(g.config.GenPackage)
 
-	if err := generateHandlerFile(handlerPath, pkgName, g.handlerName, genImportPath, g.methods); err != nil {
+	if err := generateHandlerFile(genPath, pkgName, g.handlerName, genImportPath, g.methods); err != nil {
 		return fmt.Errorf("failed to generate handler: %w", err)
 	}
 
-	if err := generateRegisterFile(handlerPath, pkgName, g.handlerName, genImportPath); err != nil {
+	if err := generateRegisterFile(genPath, pkgName, g.handlerName, genImportPath); err != nil {
 		return fmt.Errorf("failed to generate register: %w", err)
 	}
 
 	return nil
 }
 
-// deriveHandlerName извлекает имя структуры хэндлера из info.title спецификации.
-// Например: "Items API" → "ItemsHandler", "User Management" → "UserManagementHandler".
-// При отсутствии title используется имя файла.
-func deriveHandlerName(specPath string) (string, error) {
-	loader := openapi3.NewLoader()
-	doc, err := loader.LoadFromFile(specPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to load spec: %w", err)
+func deriveBaseName(spec string) string {
+	base := filepath.Base(spec)
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+
+	if name == "" {
+		return ""
 	}
 
-	title := ""
-	if doc.Info != nil {
-		title = doc.Info.Title
+	runes := []rune(name)
+	lastIdx := len(runes) - 1
+	if runes[lastIdx] == 's' || runes[lastIdx] == 'S' {
+		runes = runes[:lastIdx]
 	}
 
-	if title == "" {
-		base := filepath.Base(specPath)
-		title = strings.TrimSuffix(base, filepath.Ext(base))
-	}
-
-	return cleanTitle(title) + "Handler", nil
+	return string(runes)
 }
 
-func cleanTitle(title string) string {
-	for _, suffix := range []string{" API", " api", " Service", " service", " Api"} {
-		title = strings.TrimSuffix(title, suffix)
-	}
-
-	return toPascalCase(title)
+func derivePackageName(spec string) string {
+	return deriveBaseName(spec)
 }
 
-func toPascalCase(s string) string {
-	var result strings.Builder
-	upper := true
-	for _, r := range s {
-		if r == ' ' || r == '-' || r == '_' {
-			upper = true
-
-			continue
-		}
-		if upper {
-			result.WriteRune(unicode.ToUpper(r))
-			upper = false
-		} else {
-			result.WriteRune(r)
-		}
+func deriveHandlerName(specPath string) string {
+	name := deriveBaseName(specPath)
+	if name == "" {
+		return "Handler"
 	}
 
-	return result.String()
+	runes := []rune(name)
+	runes[0] = unicode.ToUpper(runes[0])
+
+	return string(runes) + "Handler"
 }
 
 // parseServerInterface парсит сгенерированный файл и извлекает имена методов

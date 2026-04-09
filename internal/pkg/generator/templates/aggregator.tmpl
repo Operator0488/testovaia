@@ -5,7 +5,7 @@ import (
 	"context"
 	"net/http"
 {{range .Names}}
-	"{{$.ModulePath}}/internal/handler/{{.}}"{{end}}
+	"{{$.ModulePath}}/internal/api/{{.}}"{{end}}
 )
 
 // Register регистрирует обработчики всех OpenAPI спецификаций.

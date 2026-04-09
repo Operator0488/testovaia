@@ -7,13 +7,12 @@ import (
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/di"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/httpresp"
-	gen "{{.GenImport}}"
 )
 
 // Register регистрирует все HTTP-обработчики на mux.
 func Register(ctx context.Context, mux *http.ServeMux) {
 	h := di.Register(ctx, &{{.HandlerName}}{})
-	gen.HandlerWithOptions(h, gen.StdHTTPServerOptions{
+	HandlerWithOptions(h, StdHTTPServerOptions{
 		BaseRouter:       mux,
 		ErrorHandlerFunc: httpresp.JSONErrorHandler,
 	})
