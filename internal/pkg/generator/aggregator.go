@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 )
 
-// GenerateAggregator создаёт internal/handler/register.gen.go
+// GenerateAggregator создаёт internal/api/register.gen.go
 func GenerateAggregator(serviceRoot, modulePath string, specNames []string) error {
-	dir := filepath.Join(serviceRoot, "internal", "handler")
+	dir := filepath.Join(serviceRoot, "internal", "api")
 	if err := os.MkdirAll(dir, permRule); err != nil {
 		return err
 	}

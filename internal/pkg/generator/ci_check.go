@@ -8,8 +8,7 @@ import (
 
 // CICheck запускает git diff и возвращает ошибку если файлы устарели
 func CICheck(serviceRoot string) error {
-	cmd := exec.Command("git", "diff", "--quiet", "--exit-code",
-		"internal/api/", "internal/handler/")
+	cmd := exec.Command("git", "diff", "--quiet", "--exit-code", "internal/api/")
 	cmd.Dir = serviceRoot
 	if err := cmd.Run(); err != nil {
 		stat := exec.Command("git", "diff", "--stat")
