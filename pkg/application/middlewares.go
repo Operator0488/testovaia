@@ -226,7 +226,7 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-type authFunc func(r *http.Request) error
+type authFunc func(r *http.Request) (*http.Request, error)
 
 type authConfig struct {
 	mu       sync.Mutex
@@ -274,13 +274,14 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if err := fn(r); err != nil {
+		newReq, err := fn(r)
+		if err != nil {
 			response.WriteError(ctx, w, r, response.Unauthorized())
 
 			return
 		}
 
-		next(w, r)
+		next(w, newReq)
 	}
 }
 
