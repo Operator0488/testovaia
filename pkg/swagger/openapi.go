@@ -29,7 +29,7 @@ type multiSpecHandler struct {
 }
 
 // MultiSpecMiddleware обслуживает Swagger UI для нескольких OpenAPI спецификаций.
-// Каждая спецификация доступна по пути https://host:port/{externalPrefix}/swagger/{name}/openapi.json.
+// Каждая спецификация доступна по пути https://{{baseUrl}}/{externalPrefix}/swagger/{nameFromYamlSpec}/openapi.json.
 // UI показывает выпадающий список для выбора спецификации.
 func MultiSpecMiddleware(specs []SpecEntry, externalPrefix string) (func(http.HandlerFunc) http.HandlerFunc, error) {
 	handler, err := newMultiSpecHandler(specs, externalPrefix)
@@ -60,7 +60,7 @@ func newMultiSpecHandler(specs []SpecEntry, externalPrefix string) (*multiSpecHa
 	}
 
 	return &multiSpecHandler{
-		basePath:       externalPrefix + swaggerPath,
+		basePath:       swaggerPath,
 		jsonSpecs:      jsonSpecs,
 		uiPage:         uiPage,
 		externalPrefix: externalPrefix,
@@ -72,7 +72,7 @@ func (h *multiSpecHandler) serve(w http.ResponseWriter, r *http.Request, next ht
 
 	switch {
 	case p == h.basePath:
-		http.Redirect(w, r, h.basePath+"/", http.StatusMovedPermanently)
+		http.Redirect(w, r, h.externalPrefix+h.basePath+"/", http.StatusMovedPermanently)
 	case p == h.basePath+"/":
 		h.serveHTMLSpec(w)
 	case p == h.basePath+"/openapi.json" && len(h.jsonSpecs) == 1:
