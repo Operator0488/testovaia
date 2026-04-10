@@ -11,6 +11,9 @@ import (
 )
 
 const (
+	envJWKSURL         = "jwt.jwks_url"
+	defaultJWKSURL     = "http://identity-service:8080/.well-known/jwks.json"
+
 	envKafkaBrokers = "kafka.brokers"
 	envKafkaGroup   = "kafka.group"
 	envAppName      = cfg.EnvAppName
@@ -98,6 +101,12 @@ func (a *appConfig) GetRedisConfig() redis.RedisConfig {
 		Username:     a.GetString(envRedisUsername),
 		Password:     a.GetString(envRedisPwd),
 	}
+}
+
+// jwt
+
+func (a *appConfig) GetJWKSURL() string {
+	return getStringOrDefault(a.GetString(envJWKSURL), defaultJWKSURL)
 }
 
 func getStringOrDefault(value string, def string) string {
