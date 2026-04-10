@@ -29,32 +29,6 @@ paths: {}`),
 	}
 }
 
-func TestNewMultiSpecHandler_BasePath(t *testing.T) {
-	tests := []struct {
-		name           string
-		externalPrefix string
-		wantBasePath   string
-	}{
-		{
-			name:           "с префиксом",
-			externalPrefix: "/api/some-service",
-			wantBasePath:   "/api/some-service/swagger",
-		},
-		{
-			name:           "без префикса",
-			externalPrefix: "",
-			wantBasePath:   "/swagger",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := mustNewHandler(t, []SpecEntry{minimalYAML("comments")}, tt.externalPrefix)
-			assert.Equal(t, tt.wantBasePath, h.basePath)
-		})
-	}
-}
-
 func TestNewMultiSpecHandler_ConvertsYAMLtoJSON(t *testing.T) {
 	h := mustNewHandler(t, []SpecEntry{minimalYAML("comments")}, "")
 
@@ -136,7 +110,7 @@ func TestServe_Routing(t *testing.T) {
 	}{
 		{
 			name:       "redirect без trailing slash",
-			path:       "/api/some-service/swagger",
+			path:       "/swagger",
 			wantStatus: http.StatusMovedPermanently,
 			wantHeader: map[string]string{
 				"Location": "/api/some-service/swagger/",
@@ -144,7 +118,7 @@ func TestServe_Routing(t *testing.T) {
 		},
 		{
 			name:       "UI страница",
-			path:       "/api/some-service/swagger/",
+			path:       "/swagger/",
 			wantStatus: http.StatusOK,
 			wantHeader: map[string]string{
 				"Content-Type": "text/html; charset=utf-8",
@@ -152,7 +126,7 @@ func TestServe_Routing(t *testing.T) {
 		},
 		{
 			name:       "спецификация comments",
-			path:       "/api/some-service/swagger/comments/openapi.json",
+			path:       "/swagger/comments/openapi.json",
 			wantStatus: http.StatusOK,
 			wantHeader: map[string]string{
 				"Content-Type": "application/json",
@@ -160,7 +134,7 @@ func TestServe_Routing(t *testing.T) {
 		},
 		{
 			name:       "спецификация customers",
-			path:       "/api/some-service/swagger/customers/openapi.json",
+			path:       "/swagger/customers/openapi.json",
 			wantStatus: http.StatusOK,
 			wantHeader: map[string]string{
 				"Content-Type": "application/json",
@@ -168,7 +142,7 @@ func TestServe_Routing(t *testing.T) {
 		},
 		{
 			name:       "несуществующий путь — проваливается в next",
-			path:       "/api/some-service/v1/customers",
+			path:       "/v1/customers",
 			wantStatus: http.StatusNotFound,
 		},
 	}
@@ -189,11 +163,10 @@ func TestServe_Routing(t *testing.T) {
 }
 
 func TestServe_SingleSpec_CompatPath(t *testing.T) {
-	// для одной спеки работает /swagger/openapi.json
 	h := mustNewHandler(t, []SpecEntry{minimalYAML("comments")}, "/api/some-service")
 	notFound := http.HandlerFunc(http.NotFound)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/some-service/swagger/openapi.json", nil)
+	r := httptest.NewRequest(http.MethodGet, "/swagger/openapi.json", nil)
 	w := httptest.NewRecorder()
 
 	h.serve(w, r, notFound)
@@ -206,7 +179,7 @@ func TestServe_SpecContainsPatchedServers(t *testing.T) {
 	h := mustNewHandler(t, []SpecEntry{minimalYAML("comments")}, "/api/some-service")
 	notFound := http.HandlerFunc(http.NotFound)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/some-service/swagger/comments/openapi.json", nil)
+	r := httptest.NewRequest(http.MethodGet, "/swagger/comments/openapi.json", nil)
 	w := httptest.NewRecorder()
 
 	h.serve(w, r, notFound)
@@ -227,7 +200,7 @@ func TestServe_UIContainsRelativeURLs(t *testing.T) {
 	h := mustNewHandler(t, specs, "/api/some-service")
 	notFound := http.HandlerFunc(http.NotFound)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/some-service/swagger/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/swagger/", nil)
 	w := httptest.NewRecorder()
 
 	h.serve(w, r, notFound)
@@ -239,4 +212,30 @@ func TestServe_UIContainsRelativeURLs(t *testing.T) {
 	assert.Contains(t, body, `"./customers/openapi.json"`)
 	assert.NotContains(t, body, `"/swagger/`)
 	assert.NotContains(t, body, `"/api/`)
+}
+
+func TestNewMultiSpecHandler_BasePath(t *testing.T) {
+	tests := []struct {
+		name           string
+		externalPrefix string
+		wantBasePath   string
+	}{
+		{
+			name:           "prefix НЕ входит в basePath",
+			externalPrefix: "/api/some-service",
+			wantBasePath:   "/swagger",
+		},
+		{
+			name:           "без префикса",
+			externalPrefix: "",
+			wantBasePath:   "/swagger",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := mustNewHandler(t, []SpecEntry{minimalYAML("comments")}, tt.externalPrefix)
+			assert.Equal(t, tt.wantBasePath, h.basePath)
+		})
+	}
 }
