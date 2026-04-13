@@ -48,7 +48,7 @@ type HealthResponse struct {
 
 func checkReadiness(ctx context.Context, a *Application) HealthResponse {
 	response := HealthResponse{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Code:      http.StatusServiceUnavailable,
 	}
 
@@ -89,7 +89,7 @@ func (a *Application) livenessMiddleware(next http.HandlerFunc) http.HandlerFunc
 		if r.URL.Path == "/healthz/live" {
 			w.Header().Set("Content-Type", "application/json")
 			response := HealthResponse{
-				Timestamp: time.Now(),
+				Timestamp: time.Now().UTC(),
 				Status:    "healthy",
 				Message:   "Application is running",
 				Code:      http.StatusOK,
@@ -151,7 +151,7 @@ func (a *Application) httpMetricsMiddleware(next http.HandlerFunc) http.HandlerF
 		)
 		defer span.End()
 
-		start := time.Now()
+		start := time.Now().UTC()
 		rec := &statusRecorder{ResponseWriter: w}
 		next(rec, r.WithContext(ctx))
 

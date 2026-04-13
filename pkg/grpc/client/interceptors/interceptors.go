@@ -13,7 +13,7 @@ import (
 // MetricsUnaryInterceptor
 func MetricsUnaryInterceptor() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		start := time.Now()
+		start := time.Now().UTC()
 
 		err := invoker(ctx, method, req, reply, cc, opts...)
 
@@ -30,7 +30,7 @@ func MetricsUnaryInterceptor() grpc.UnaryClientInterceptor {
 // MetricsStreamInterceptor
 func MetricsStreamInterceptor() grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		start := time.Now()
+		start := time.Now().UTC()
 
 		clientStream, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {

@@ -168,7 +168,7 @@ func (c *client) resubscribeAll(ctx context.Context, subscriptions map[*subscrib
 
 // обновление времени последней успешной активности
 func (c *client) touchActivity() {
-	c.lastActivity.Store(time.Now().UnixNano())
+	c.lastActivity.Store(time.Now().UTC().UnixNano())
 }
 
 func (c *client) collectPoolMetrics() {

@@ -41,8 +41,8 @@ func TestJWTAuthFunc_ValidToken(t *testing.T) {
 		"sub":   "user-uuid-42",
 		"scope": "external",
 		"iss":   "identity-service",
-		"iat":   time.Now().Unix(),
-		"exp":   time.Now().Add(time.Hour).Unix(),
+		"iat":   time.Now().UTC().Unix(),
+		"exp":   time.Now().UTC().Add(time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
@@ -88,8 +88,8 @@ func TestJWTAuthFunc_ExpiredToken(t *testing.T) {
 		"sub":   "user-uuid-42",
 		"scope": "external",
 		"iss":   "identity-service",
-		"iat":   time.Now().Add(-2 * time.Hour).Unix(),
-		"exp":   time.Now().Add(-time.Hour).Unix(),
+		"iat":   time.Now().UTC().Add(-2 * time.Hour).Unix(),
+		"exp":   time.Now().UTC().Add(-time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
@@ -108,7 +108,7 @@ func TestJWTAuthFunc_UnknownKid(t *testing.T) {
 	tokenStr := signToken(t, otherKey, "unknown-kid", jwt.MapClaims{
 		"sub":   "user",
 		"scope": "external",
-		"exp":   time.Now().Add(time.Hour).Unix(),
+		"exp":   time.Now().UTC().Add(time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)

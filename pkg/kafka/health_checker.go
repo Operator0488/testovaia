@@ -66,14 +66,14 @@ func (h *healthChecker) Run(ctx context.Context) {
 func (h *healthChecker) updateState(err error) {
 	h.state.Store(&HealthState{
 		err:       err,
-		lastCheck: time.Now(),
+		lastCheck: time.Now().UTC(),
 	})
 }
 
 func (h *healthChecker) GetState() HealthState {
 	s := h.state.Load()
 	if s == nil {
-		return HealthState{lastCheck: time.Now()}
+		return HealthState{lastCheck: time.Now().UTC()}
 	}
 	return *s.(*HealthState)
 }

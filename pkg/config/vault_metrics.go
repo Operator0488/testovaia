@@ -8,7 +8,7 @@ import (
 )
 
 func withMetrics[T any](typ, mount, path string, f func() (T, error)) (T, error) {
-	start := time.Now()
+	start := time.Now().UTC()
 	val, err := f()
 	metrics.VaultRequestDurationSeconds.WithLabelValues(typ, mount, path).
 		Observe(time.Since(start).Seconds())
@@ -20,7 +20,7 @@ func withMetrics[T any](typ, mount, path string, f func() (T, error)) (T, error)
 }
 
 func withMetrics1(typ, mount, path string, f func() error) error {
-	start := time.Now()
+	start := time.Now().UTC()
 	err := f()
 	metrics.VaultRequestDurationSeconds.WithLabelValues(typ, mount, path).
 		Observe(time.Since(start).Seconds())

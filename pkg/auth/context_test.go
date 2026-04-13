@@ -15,8 +15,8 @@ func TestClaimsFromContext_ReturnsClaims(t *testing.T) {
 		Subject:   "user-uuid-123",
 		Scope:     auth.ScopeExternal,
 		Issuer:    "identity-service",
-		IssuedAt:  time.Now(),
-		ExpiresAt: time.Now().Add(time.Hour),
+		IssuedAt:  time.Now().UTC(),
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
 	}
 
 	ctx := auth.WithClaims(context.Background(), claims)
