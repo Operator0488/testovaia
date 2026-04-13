@@ -35,9 +35,9 @@ func initJWT(ctx context.Context, app *Application) error {
 	app.Closer.Add(keyStore.Stop)
 	di.Register[auth.KeyStore](ctx, keyStore)
 
-	defaultAuth.mu.Lock()
-	defaultAuth.fn = jwtAuthFunc(keyStore)
-	defaultAuth.mu.Unlock()
+	app.auth.mu.Lock()
+	app.auth.fn = jwtAuthFunc(keyStore)
+	app.auth.mu.Unlock()
 
 	return nil
 }

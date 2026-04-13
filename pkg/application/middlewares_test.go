@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -156,90 +155,94 @@ func TestNewMiddleware_InfraRoutesPassesThrough(t *testing.T) {
 	}
 }
 
-func TestAuthMiddleware(t *testing.T) {
-	// сбрасываем глобальный defaultAuth перед каждым тестом
-	resetAuth := func() {
-		defaultAuth.mu.Lock()
-		defaultAuth.fn = nil
-		defaultAuth.warnOnce = sync.Once{}
-		defaultAuth.mu.Unlock()
+func newTestApp() *Application {
+	return &Application{
+		auth:      &authConfig{},
+		rateLimit: &rateLimitConfig{},
+	}
+}
+
+func TestAuthMiddleware_InfraPathsBypassAuthFunc(t *testing.T) {
+	bypassedPaths := []string{
+		"/healthz/live",
+		"/healthz/ready",
+		"/metrics",
+		"/swagger/index.html",
 	}
 
-	t.Run("пропускает инфра-пути без вызова authFunc", func(t *testing.T) {
-		resetAuth()
-		called := false
-		defaultAuth.fn = func(r *http.Request) (*http.Request, error) {
-			called = true
-			return r, nil
-		}
+	for _, path := range bypassedPaths {
+		t.Run(path, func(t *testing.T) {
+			app := newTestApp()
+			called := false
+			app.auth.fn = func(r *http.Request) (*http.Request, error) {
+				called = true
+				return r, nil
+			}
 
-		for _, path := range []string{"/healthz/live", "/healthz/ready", "/metrics", "/swagger/index.html"} {
-			called = false
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rec := httptest.NewRecorder()
-			authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})(rec, req)
 
 			assert.False(t, called, "authFunc не должна вызываться для пути %s", path)
 			assert.Equal(t, http.StatusOK, rec.Code)
-		}
-	})
+		})
+	}
+}
 
-	t.Run("пропускает запрос если authFunc не настроена (nil)", func(t *testing.T) {
-		resetAuth()
+func TestAuthMiddleware_NilAuthFuncPassesThrough(t *testing.T) {
+	app := newTestApp()
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	called := false
 
-		req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
-		rec := httptest.NewRecorder()
-		called := false
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
 
-		authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-			called = true
-			w.WriteHeader(http.StatusOK)
-		})(rec, req)
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
 
-		assert.True(t, called)
-		assert.Equal(t, http.StatusOK, rec.Code)
-	})
+func TestAuthMiddleware_Returns401WhenAuthFuncErrors(t *testing.T) {
+	app := newTestApp()
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		return nil, errors.New("invalid token")
+	}
 
-	t.Run("возвращает 401 если authFunc вернула ошибку", func(t *testing.T) {
-		resetAuth()
-		defaultAuth.fn = func(r *http.Request) (*http.Request, error) {
-			return nil, errors.New("invalid token")
-		}
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
 
-		req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
-		rec := httptest.NewRecorder()
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
 
-		authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})(rec, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
 
-		assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	})
+func TestAuthMiddleware_EnrichedRequestPassedToHandler(t *testing.T) {
+	app := newTestApp()
+	type ctxKey string
+	const key ctxKey = "claims"
 
-	t.Run("передаёт обогащённый запрос из authFunc в следующий обработчик", func(t *testing.T) {
-		resetAuth()
-		type ctxKey string
-		const key ctxKey = "claims"
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		ctx := context.WithValue(r.Context(), key, "injected-claims")
+		return r.WithContext(ctx), nil
+	}
 
-		defaultAuth.fn = func(r *http.Request) (*http.Request, error) {
-			ctx := context.WithValue(r.Context(), key, "injected-claims")
-			return r.WithContext(ctx), nil
-		}
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	var gotValue string
 
-		req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
-		rec := httptest.NewRecorder()
-		var gotValue string
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		gotValue, _ = r.Context().Value(key).(string)
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
 
-		authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-			gotValue, _ = r.Context().Value(key).(string)
-			w.WriteHeader(http.StatusOK)
-		})(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "injected-claims", gotValue)
-	})
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "injected-claims", gotValue)
 }
 
 func TestNewMiddleware_InvalidSpec(t *testing.T) {

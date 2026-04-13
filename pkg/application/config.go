@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	envJWKSURL         = "jwt.jwks_url"
-	defaultJWKSURL     = "http://identity-service:8080/.well-known/jwks.json"
+	envJWKSURL     = "jwt.jwks_url"
+	defaultJWKSURL = "http://identity-service:8080/.well-known/jwks.json"
 
 	envKafkaBrokers = "kafka.brokers"
 	envKafkaGroup   = "kafka.group"
