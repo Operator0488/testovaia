@@ -229,7 +229,7 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 type authFunc func(r *http.Request) (*http.Request, error)
 
 type authConfig struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	fn       authFunc
 	warnOnce sync.Once
 }
@@ -257,9 +257,9 @@ func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 
-		a.auth.mu.Lock()
+		a.auth.mu.RLock()
 		fn := a.auth.fn
-		a.auth.mu.Unlock()
+		a.auth.mu.RUnlock()
 
 		if fn == nil {
 			a.auth.warnOnce.Do(func() {
