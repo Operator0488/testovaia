@@ -37,7 +37,7 @@ func (v Value) IsNotFound() bool {
 }
 
 func (c *client) Get(ctx context.Context, key string) Value {
-	start := time.Now()
+	start := time.Now().UTC()
 	val, err := c.universal().Get(ctx, key).Result()
 	metrics.RedisQueryDuration.WithLabelValues("GET").Observe(time.Since(start).Seconds())
 
@@ -65,7 +65,7 @@ func (c *client) Set(ctx context.Context, key string, val any, ttl time.Duration
 		return err
 	}
 
-	start := time.Now()
+	start := time.Now().UTC()
 	err = c.universal().Set(ctx, key, bt, ttl).Err()
 	metrics.RedisQueryDuration.WithLabelValues("SET").Observe(time.Since(start).Seconds())
 
@@ -83,7 +83,7 @@ func (c *client) Set(ctx context.Context, key string, val any, ttl time.Duration
 }
 
 func (c *client) Del(ctx context.Context, keys ...string) error {
-	start := time.Now()
+	start := time.Now().UTC()
 	err := c.universal().Del(ctx, keys...).Err()
 	metrics.RedisQueryDuration.WithLabelValues("DEL").Observe(time.Since(start).Seconds())
 
@@ -110,7 +110,7 @@ func (c *client) Publish(ctx context.Context, channel string, msg any) error {
 		return err
 	}
 
-	start := time.Now()
+	start := time.Now().UTC()
 	err = c.universal().Publish(ctx, channel, b).Err()
 	metrics.RedisQueryDuration.WithLabelValues("PUBLISH").Observe(time.Since(start).Seconds())
 

@@ -75,6 +75,9 @@ type Application struct {
 	swagger    *swagger.Manager
 	apiFS      fs.FS
 	registerFn RegisterFn
+
+	auth      *authConfig
+	rateLimit *rateLimitConfig
 }
 
 func NewWithConfig(ctx context.Context, env config.Configurer, components ...Option) (*Application, error) {
@@ -111,6 +114,8 @@ func new(ctx context.Context, env config.Configurer, components ...Option) (*App
 		context:        ctx,
 		router:         http.HandlerFunc(noopHandler()),
 		waitCloserTime: defaultWaitCloserTime,
+		auth:           &authConfig{},
+		rateLimit:      &rateLimitConfig{},
 	}
 
 	// добавляем компонент контейнера первым,

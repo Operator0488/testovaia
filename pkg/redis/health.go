@@ -54,7 +54,7 @@ func (h *healthLoop) start(ctx context.Context, c *client) {
 				continue
 			}
 
-			start := time.Now()
+			start := time.Now().UTC()
 
 			if err := c.universal().Ping(ctx).Err(); err != nil {
 				h.ok.Store(false)

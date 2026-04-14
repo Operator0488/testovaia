@@ -48,7 +48,7 @@ type HealthResponse struct {
 
 func checkReadiness(ctx context.Context, a *Application) HealthResponse {
 	response := HealthResponse{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Code:      http.StatusServiceUnavailable,
 	}
 
@@ -89,7 +89,7 @@ func (a *Application) livenessMiddleware(next http.HandlerFunc) http.HandlerFunc
 		if r.URL.Path == "/healthz/live" {
 			w.Header().Set("Content-Type", "application/json")
 			response := HealthResponse{
-				Timestamp: time.Now(),
+				Timestamp: time.Now().UTC(),
 				Status:    "healthy",
 				Message:   "Application is running",
 				Code:      http.StatusOK,
@@ -151,7 +151,7 @@ func (a *Application) httpMetricsMiddleware(next http.HandlerFunc) http.HandlerF
 		)
 		defer span.End()
 
-		start := time.Now()
+		start := time.Now().UTC()
 		rec := &statusRecorder{ResponseWriter: w}
 		next(rec, r.WithContext(ctx))
 
@@ -226,17 +226,15 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-type authFunc func(r *http.Request) error
+type authFunc func(r *http.Request) (*http.Request, error)
 
 type authConfig struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	fn       authFunc
 	warnOnce sync.Once
 }
 
 // Auth
-
-var defaultAuth = &authConfig{}
 
 // authMiddleware создает middleware для проверки аутентификации запросов
 //
@@ -249,7 +247,7 @@ var defaultAuth = &authConfig{}
 //  2. Если функция аутентификации не настроена (fn == nil) - временная заглушка:
 //     - Выводит предупреждение в лог (один раз за время работы приложения)
 //     - Пропускает запрос без проверки
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
 			next(w, r)
@@ -259,12 +257,12 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 
-		defaultAuth.mu.Lock()
-		fn := defaultAuth.fn
-		defaultAuth.mu.Unlock()
+		a.auth.mu.RLock()
+		fn := a.auth.fn
+		a.auth.mu.RUnlock()
 
 		if fn == nil {
-			defaultAuth.warnOnce.Do(func() {
+			a.auth.warnOnce.Do(func() {
 				logger.Warn(r.Context(),
 					"authentication middleware is not configured, all requests are allowed",
 				)
@@ -274,13 +272,14 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if err := fn(r); err != nil {
+		newReq, err := fn(r)
+		if err != nil {
 			response.WriteError(ctx, w, r, response.Unauthorized())
 
 			return
 		}
 
-		next(w, r)
+		next(w, newReq)
 	}
 }
 
@@ -294,8 +293,6 @@ type rateLimitConfig struct {
 	warnOnce sync.Once
 }
 
-var defaultRateLimit = &rateLimitConfig{}
-
 // rateLimitMiddleware создает middleware для ограничения частоты запросов
 //
 // Middleware работает по следующему принципу:
@@ -307,7 +304,7 @@ var defaultRateLimit = &rateLimitConfig{}
 //  2. Если функция rate limit не настроена (fn == nil) - временная заглушка:
 //     - Выводит предупреждение в лог (один раз за время работы приложения)
 //     - Пропускает запрос без проверки
-func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (a *Application) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
 			next(w, r)
@@ -317,12 +314,12 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 
-		defaultRateLimit.mu.Lock()
-		fn := defaultRateLimit.fn
-		defaultRateLimit.mu.Unlock()
+		a.rateLimit.mu.Lock()
+		fn := a.rateLimit.fn
+		a.rateLimit.mu.Unlock()
 
 		if fn == nil {
-			defaultRateLimit.warnOnce.Do(func() {
+			a.rateLimit.warnOnce.Do(func() {
 				logger.Warn(ctx,
 					"rate limit middleware is not configured, all requests are allowed",
 				)

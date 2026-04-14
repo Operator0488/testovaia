@@ -90,7 +90,7 @@ func metricsProduceMiddleware() produceMiddleware {
 			topic = messages[0].Topic
 		}
 
-		start := time.Now()
+		start := time.Now().UTC()
 		err := next(ctx, messages)
 		duration := time.Since(start)
 
@@ -111,7 +111,7 @@ func metricsConsumeMiddleware() consumeMiddleware {
 	return func(ctx context.Context, msg Message, next ConsumeHandler) error {
 		topic := msg.Topic
 
-		start := time.Now()
+		start := time.Now().UTC()
 		err := next(ctx, msg)
 		duration := time.Since(start)
 

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -152,6 +153,96 @@ func TestNewMiddleware_InfraRoutesPassesThrough(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTestApp() *Application {
+	return &Application{
+		auth:      &authConfig{},
+		rateLimit: &rateLimitConfig{},
+	}
+}
+
+func TestAuthMiddleware_InfraPathsBypassAuthFunc(t *testing.T) {
+	bypassedPaths := []string{
+		"/healthz/live",
+		"/healthz/ready",
+		"/metrics",
+		"/swagger/index.html",
+	}
+
+	for _, path := range bypassedPaths {
+		t.Run(path, func(t *testing.T) {
+			app := newTestApp()
+			called := false
+			app.auth.fn = func(r *http.Request) (*http.Request, error) {
+				called = true
+				return r, nil
+			}
+
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})(rec, req)
+
+			assert.False(t, called, "authFunc не должна вызываться для пути %s", path)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
+}
+
+func TestAuthMiddleware_NilAuthFuncPassesThrough(t *testing.T) {
+	app := newTestApp()
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	called := false
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAuthMiddleware_Returns401WhenAuthFuncErrors(t *testing.T) {
+	app := newTestApp()
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		return nil, errors.New("invalid token")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAuthMiddleware_EnrichedRequestPassedToHandler(t *testing.T) {
+	app := newTestApp()
+	type ctxKey string
+	const key ctxKey = "claims"
+
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		ctx := context.WithValue(r.Context(), key, "injected-claims")
+		return r.WithContext(ctx), nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	var gotValue string
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		gotValue, _ = r.Context().Value(key).(string)
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "injected-claims", gotValue)
 }
 
 func TestNewMiddleware_InvalidSpec(t *testing.T) {
