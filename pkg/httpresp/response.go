@@ -30,6 +30,10 @@ func BadRequest[T any](message string) Response[T] {
 	return Response[T]{err: response.BadRequest(message)}
 }
 
+func Forbidden[T any](message string) Response[T] {
+	return Response[T]{err: response.Forbidden(message)}
+}
+
 func NotFound[T any](resource string) Response[T] {
 	return Response[T]{err: response.NotFound(resource)}
 }

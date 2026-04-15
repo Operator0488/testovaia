@@ -53,6 +53,14 @@ func BadRequest(message string) HTTPError {
 	}
 }
 
+func Forbidden(message string) HTTPError {
+	return &clientError{
+		code:       "FORBIDDEN",
+		message:    message,
+		httpStatus: http.StatusForbidden,
+	}
+}
+
 func Unauthorized() HTTPError {
 	return &clientError{
 		code:       "UNAUTHORIZED",
