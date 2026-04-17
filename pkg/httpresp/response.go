@@ -26,6 +26,10 @@ func NoContent[T any]() Response[T] {
 	return Response[T]{statusCode: http.StatusNoContent}
 }
 
+func Accepted[T any](data T) Response[T] {
+	return Response[T]{data: data, statusCode: http.StatusAccepted}
+}
+
 func BadRequest[T any](message string) Response[T] {
 	return Response[T]{err: response.BadRequest(message)}
 }
