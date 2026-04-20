@@ -77,10 +77,13 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 		specEntries = append(specEntries, swagger.SpecEntry{Name: s.Name, Data: s.Data})
 	}
 
-	validationMw, err := httpValidationMiddleware(ctx, specData...)
+	routerList, err := buildRouters(ctx, specData)
 	if err != nil {
 		return fmt.Errorf("openapi validation init failed: %w", err)
 	}
+
+	app.openAPIRouters = routerList
+	validationMw := httpValidationMiddleware(ctx, routerList)
 
 	swaggerMw, err := swagger.MultiSpecMiddleware(specEntries, resolveExternalPrefix(app))
 	if err != nil {
