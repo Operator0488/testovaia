@@ -239,17 +239,18 @@ type authConfig struct {
 // authMiddleware создает middleware для проверки аутентификации запросов
 //
 // Middleware работает по следующему принципу:
-//  1. Пропускает запросы к служебным путям без проверки:
-//     - /healthz/live
-//     - /healthz/ready
-//     - /metrics
-//     - Любые пути, начинающиеся с /swagger
-//  2. Если функция аутентификации не настроена (fn == nil) - временная заглушка:
-//     - Выводит предупреждение в лог (один раз за время работы приложения)
-//     - Пропускает запрос без проверки
+//  1. Пропускает запросы к служебным путям без проверки (/healthz/*, /metrics, /swagger*)
+//  2. Если маршрут найден в OpenAPI-спецификации и не требует auth (security: []) — пропускает
+//  3. Если функция аутентификации не настроена (fn == nil) — предупреждение и пропуск
 func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
+			next(w, r)
+
+			return
+		}
+
+		if !routeRequiresAuth(r, a.openAPIRouters) {
 			next(w, r)
 
 			return
@@ -281,6 +282,28 @@ func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, newReq)
 	}
+}
+
+// routeRequiresAuth возвращает true, если найденный в спецификации маршрут требует аутентификации.
+// Если маршрут не найден ни в одной спецификации — считается защищённым (fail-secure).
+func routeRequiresAuth(r *http.Request, routerList []routers.Router) bool {
+	for _, router := range routerList {
+		route, _, err := router.FindRoute(r)
+		if err != nil {
+			continue
+		}
+
+		// operation-level security переопределяет doc-level
+		if route.Operation.Security != nil {
+			return len(*route.Operation.Security) > 0
+		}
+
+		// fallback на doc-level security
+		return len(route.Spec.Security) > 0
+	}
+
+	// маршрут не описан в спеке — считаем защищённым
+	return true
 }
 
 // Rate limit
@@ -341,15 +364,8 @@ func (a *Application) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFun
 
 // OpenAPI
 
-// httpValidationMiddleware возвращает стандартный net/http middleware, который валидирует
-// входящие запросы на соответствие одной или нескольким OpenAPI спецификациям.
-// Маршруты, не описанные ни в одной спецификации (например, /healthz, /metrics),
-// пропускаются без валидации — не зависит от фреймворка, работает с echo, gin и др.
-//
-// При передаче нескольких спецификаций middleware последовательно ищет маршрут
-// в каждом роутере: если маршрут найден — валидирует запрос, если нет —
-// переходит к следующей спецификации.
-func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.HandlerFunc) http.HandlerFunc, error) {
+// buildRouters парсит байты спецификаций и строит список kin-openapi роутеров.
+func buildRouters(ctx context.Context, specs [][]byte) ([]routers.Router, error) {
 	routerList := make([]routers.Router, 0, len(specs))
 	for _, spec := range specs {
 		r, err := newRouter(ctx, spec)
@@ -359,6 +375,18 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 		routerList = append(routerList, r)
 	}
 
+	return routerList, nil
+}
+
+// httpValidationMiddleware возвращает стандартный net/http middleware, который валидирует
+// входящие запросы на соответствие одной или нескольким OpenAPI спецификациям.
+// Маршруты, не описанные ни в одной спецификации (например, /healthz, /metrics),
+// пропускаются без валидации — не зависит от фреймворка, работает с echo, gin и др.
+//
+// При передаче нескольких спецификаций middleware последовательно ищет маршрут
+// в каждом роутере: если маршрут найден — валидирует запрос, если нет —
+// переходит к следующей спецификации.
+func httpValidationMiddleware(ctx context.Context, routerList []routers.Router) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if err := validateMultiRequest(ctx, r, routerList); err != nil {
@@ -369,7 +397,7 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 			}
 			next(w, r)
 		}
-	}, nil
+	}
 }
 
 // getReason возвращает причину ошибки валидации запроса

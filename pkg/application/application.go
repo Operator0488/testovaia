@@ -11,6 +11,7 @@ import (
 
 	grpcserver "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/grpc/server"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/swagger"
+	"github.com/getkin/kin-openapi/routers"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/workflow"
 
@@ -72,9 +73,10 @@ type Application struct {
 	GrpcClients       *grpcclient.Manager
 
 	// HTTP / OpenAPI
-	swagger    *swagger.Manager
-	apiFS      fs.FS
-	registerFn RegisterFn
+	swagger        *swagger.Manager
+	apiFS          fs.FS
+	registerFn     RegisterFn
+	openAPIRouters []routers.Router
 
 	auth      *authConfig
 	rateLimit *rateLimitConfig
