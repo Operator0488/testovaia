@@ -59,6 +59,7 @@ func New(ctx context.Context, cfg RedisConfig) (Redis, error) {
 		logger.Error(ctx, "redis client initialization failed",
 			logger.Any("addrs", cfg.Addrs),
 			logger.Int("db", cfg.DB),
+			logger.String("mastername", cfg.MasterName),
 			logger.String("error", err.Error()),
 		)
 		return nil, err
@@ -88,6 +89,7 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 
 	opts := &goRedis.UniversalOptions{
 		Addrs:        cfg.Addrs,
+		MasterName:   cfg.MasterName,
 		DB:           cfg.DB,
 		PoolSize:     cfg.PoolSize,
 		DialTimeout:  cfg.DialTimeout,
