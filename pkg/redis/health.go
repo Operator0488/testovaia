@@ -50,7 +50,7 @@ func (h *healthLoop) start(ctx context.Context, c *client) {
 		case <-ticker.C:
 			// если редис недавно использовали, то скип
 
-			if time.Since(c.lastUsed()) < interval {
+			if time.Since(c.lastUsed()) < interval*time.Second {
 				continue
 			}
 
