@@ -34,6 +34,10 @@ func BadRequest[T any](message string) Response[T] {
 	return Response[T]{err: response.BadRequest(message)}
 }
 
+func Conflict[T any](message string) Response[T] {
+	return Response[T]{err: response.Conflict(message)}
+}
+
 func Forbidden[T any](message string) Response[T] {
 	return Response[T]{err: response.Forbidden(message)}
 }
