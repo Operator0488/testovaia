@@ -53,6 +53,14 @@ func BadRequest(message string) HTTPError {
 	}
 }
 
+func Conflict(message string) HTTPError {
+	return &clientError{
+		code:       "CONFLICT",
+		message:    message,
+		httpStatus: http.StatusConflict,
+	}
+}
+
 func Forbidden(message string) HTTPError {
 	return &clientError{
 		code:       "FORBIDDEN",
