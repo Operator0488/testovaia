@@ -4,6 +4,7 @@ import "time"
 
 type RedisConfig struct {
 	Addrs        []string
+	MasterName   string
 	DB           int
 	PoolSize     int
 	DialTimeout  time.Duration

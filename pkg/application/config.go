@@ -23,6 +23,7 @@ const (
 	envHTTPHost     = "app.host"
 
 	envRedisAddrs        = "redis.addrs"
+	envRedisMasterName   = "redis.master_name"
 	envRedisDb           = "redis.db"
 	envRedisPoolSize     = "redis.pool_size"
 	envRedisDialTimeout  = "redis.dial_timeout"
@@ -93,6 +94,7 @@ func (a *appConfig) GetHTTPServerConfig() httpServerConfig {
 func (a *appConfig) GetRedisConfig() redis.RedisConfig {
 	return redis.RedisConfig{
 		Addrs:        a.GetStringSlice(envRedisAddrs), // TODO default?
+		MasterName:   a.GetStringOrDefault(envRedisMasterName, "mymaster"),
 		DB:           a.GetInt(envRedisDb),
 		PoolSize:     a.GetInt(envRedisPoolSize),
 		DialTimeout:  a.GetDuration(envRedisDialTimeout),
