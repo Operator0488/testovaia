@@ -48,7 +48,7 @@ type HealthResponse struct {
 
 func checkReadiness(ctx context.Context, a *Application) HealthResponse {
 	response := HealthResponse{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Code:      http.StatusServiceUnavailable,
 	}
 
@@ -89,7 +89,7 @@ func (a *Application) livenessMiddleware(next http.HandlerFunc) http.HandlerFunc
 		if r.URL.Path == "/healthz/live" {
 			w.Header().Set("Content-Type", "application/json")
 			response := HealthResponse{
-				Timestamp: time.Now(),
+				Timestamp: time.Now().UTC(),
 				Status:    "healthy",
 				Message:   "Application is running",
 				Code:      http.StatusOK,
@@ -151,7 +151,7 @@ func (a *Application) httpMetricsMiddleware(next http.HandlerFunc) http.HandlerF
 		)
 		defer span.End()
 
-		start := time.Now()
+		start := time.Now().UTC()
 		rec := &statusRecorder{ResponseWriter: w}
 		next(rec, r.WithContext(ctx))
 
@@ -226,30 +226,23 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-type authFunc func(r *http.Request) error
+type authFunc func(r *http.Request) (*http.Request, error)
 
 type authConfig struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	fn       authFunc
 	warnOnce sync.Once
 }
 
 // Auth
 
-var defaultAuth = &authConfig{}
-
 // authMiddleware создает middleware для проверки аутентификации запросов
 //
 // Middleware работает по следующему принципу:
-//  1. Пропускает запросы к служебным путям без проверки:
-//     - /healthz/live
-//     - /healthz/ready
-//     - /metrics
-//     - Любые пути, начинающиеся с /swagger
-//  2. Если функция аутентификации не настроена (fn == nil) - временная заглушка:
-//     - Выводит предупреждение в лог (один раз за время работы приложения)
-//     - Пропускает запрос без проверки
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+//  1. Пропускает запросы к служебным путям без проверки (/healthz/*, /metrics, /swagger*)
+//  2. Если маршрут найден в OpenAPI-спецификации и не требует auth (security: []) — пропускает
+//  3. Если функция аутентификации не настроена (fn == nil) — предупреждение и пропуск
+func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
 			next(w, r)
@@ -257,14 +250,20 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if !routeRequiresAuth(r, a.openAPIRouters) {
+			next(w, r)
+
+			return
+		}
+
 		ctx := r.Context()
 
-		defaultAuth.mu.Lock()
-		fn := defaultAuth.fn
-		defaultAuth.mu.Unlock()
+		a.auth.mu.RLock()
+		fn := a.auth.fn
+		a.auth.mu.RUnlock()
 
 		if fn == nil {
-			defaultAuth.warnOnce.Do(func() {
+			a.auth.warnOnce.Do(func() {
 				logger.Warn(r.Context(),
 					"authentication middleware is not configured, all requests are allowed",
 				)
@@ -274,14 +273,37 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if err := fn(r); err != nil {
+		newReq, err := fn(r)
+		if err != nil {
 			response.WriteError(ctx, w, r, response.Unauthorized())
 
 			return
 		}
 
-		next(w, r)
+		next(w, newReq)
 	}
+}
+
+// routeRequiresAuth возвращает true, если найденный в спецификации маршрут требует аутентификации.
+// Если маршрут не найден ни в одной спецификации — считается защищённым (fail-secure).
+func routeRequiresAuth(r *http.Request, routerList []routers.Router) bool {
+	for _, router := range routerList {
+		route, _, err := router.FindRoute(r)
+		if err != nil {
+			continue
+		}
+
+		// operation-level security переопределяет doc-level
+		if route.Operation.Security != nil {
+			return len(*route.Operation.Security) > 0
+		}
+
+		// fallback на doc-level security
+		return len(route.Spec.Security) > 0
+	}
+
+	// маршрут не описан в спеке — считаем защищённым
+	return true
 }
 
 // Rate limit
@@ -294,8 +316,6 @@ type rateLimitConfig struct {
 	warnOnce sync.Once
 }
 
-var defaultRateLimit = &rateLimitConfig{}
-
 // rateLimitMiddleware создает middleware для ограничения частоты запросов
 //
 // Middleware работает по следующему принципу:
@@ -307,7 +327,7 @@ var defaultRateLimit = &rateLimitConfig{}
 //  2. Если функция rate limit не настроена (fn == nil) - временная заглушка:
 //     - Выводит предупреждение в лог (один раз за время работы приложения)
 //     - Пропускает запрос без проверки
-func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (a *Application) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
 			next(w, r)
@@ -317,12 +337,12 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 
-		defaultRateLimit.mu.Lock()
-		fn := defaultRateLimit.fn
-		defaultRateLimit.mu.Unlock()
+		a.rateLimit.mu.Lock()
+		fn := a.rateLimit.fn
+		a.rateLimit.mu.Unlock()
 
 		if fn == nil {
-			defaultRateLimit.warnOnce.Do(func() {
+			a.rateLimit.warnOnce.Do(func() {
 				logger.Warn(ctx,
 					"rate limit middleware is not configured, all requests are allowed",
 				)
@@ -344,15 +364,8 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // OpenAPI
 
-// httpValidationMiddleware возвращает стандартный net/http middleware, который валидирует
-// входящие запросы на соответствие одной или нескольким OpenAPI спецификациям.
-// Маршруты, не описанные ни в одной спецификации (например, /healthz, /metrics),
-// пропускаются без валидации — не зависит от фреймворка, работает с echo, gin и др.
-//
-// При передаче нескольких спецификаций middleware последовательно ищет маршрут
-// в каждом роутере: если маршрут найден — валидирует запрос, если нет —
-// переходит к следующей спецификации.
-func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.HandlerFunc) http.HandlerFunc, error) {
+// buildRouters парсит байты спецификаций и строит список kin-openapi роутеров.
+func buildRouters(ctx context.Context, specs [][]byte) ([]routers.Router, error) {
 	routerList := make([]routers.Router, 0, len(specs))
 	for _, spec := range specs {
 		r, err := newRouter(ctx, spec)
@@ -362,6 +375,18 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 		routerList = append(routerList, r)
 	}
 
+	return routerList, nil
+}
+
+// httpValidationMiddleware возвращает стандартный net/http middleware, который валидирует
+// входящие запросы на соответствие одной или нескольким OpenAPI спецификациям.
+// Маршруты, не описанные ни в одной спецификации (например, /healthz, /metrics),
+// пропускаются без валидации — не зависит от фреймворка, работает с echo, gin и др.
+//
+// При передаче нескольких спецификаций middleware последовательно ищет маршрут
+// в каждом роутере: если маршрут найден — валидирует запрос, если нет —
+// переходит к следующей спецификации.
+func httpValidationMiddleware(ctx context.Context, routerList []routers.Router) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if err := validateMultiRequest(ctx, r, routerList); err != nil {
@@ -372,7 +397,7 @@ func httpValidationMiddleware(ctx context.Context, specs ...[]byte) (func(http.H
 			}
 			next(w, r)
 		}
-	}, nil
+	}
 }
 
 // getReason возвращает причину ошибки валидации запроса

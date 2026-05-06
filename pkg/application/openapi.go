@@ -15,8 +15,10 @@ import (
 
 const uuidPattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 
-var openapiComponent = NewComponent("openapi", initOpenAPI, Noop)
-var registerUUIDOnce sync.Once
+var (
+	openapiComponent = NewComponent("openapi", initOpenAPI, Noop)
+	registerUUIDOnce sync.Once
+)
 
 // RegisterFn — функция, которую сервис передаёт для регистрации своих HTTP-хендлеров на mux.
 // ctx содержит DI-контейнер, что позволяет использовать di.Resolve для получения зависимостей.
@@ -75,10 +77,13 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 		specEntries = append(specEntries, swagger.SpecEntry{Name: s.Name, Data: s.Data})
 	}
 
-	validationMw, err := httpValidationMiddleware(ctx, specData...)
+	routerList, err := buildRouters(ctx, specData)
 	if err != nil {
 		return fmt.Errorf("openapi validation init failed: %w", err)
 	}
+
+	app.openAPIRouters = routerList
+	validationMw := httpValidationMiddleware(ctx, routerList)
 
 	swaggerMw, err := swagger.MultiSpecMiddleware(specEntries, resolveExternalPrefix(app))
 	if err != nil {
@@ -86,8 +91,8 @@ func initOpenAPI(ctx context.Context, app *Application) error {
 	}
 
 	app.middlewares.Add(swaggerMw)
-	app.middlewares.Add(authMiddleware)
-	app.middlewares.Add(rateLimitMiddleware)
+	app.middlewares.Add(app.authMiddleware)
+	app.middlewares.Add(app.rateLimitMiddleware)
 	app.middlewares.Add(validationMw)
 
 	if app.registerFn != nil {

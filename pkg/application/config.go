@@ -11,6 +11,9 @@ import (
 )
 
 const (
+	envJWKSURL     = "jwt.jwks_url"
+	defaultJWKSURL = "http://identity-service:8080/.well-known/jwks.json"
+
 	envKafkaBrokers = "kafka.brokers"
 	envKafkaGroup   = "kafka.group"
 	envAppName      = cfg.EnvAppName
@@ -20,6 +23,7 @@ const (
 	envHTTPHost     = "app.host"
 
 	envRedisAddrs        = "redis.addrs"
+	envRedisMasterName   = "redis.master_name"
 	envRedisDb           = "redis.db"
 	envRedisPoolSize     = "redis.pool_size"
 	envRedisDialTimeout  = "redis.dial_timeout"
@@ -90,6 +94,7 @@ func (a *appConfig) GetHTTPServerConfig() httpServerConfig {
 func (a *appConfig) GetRedisConfig() redis.RedisConfig {
 	return redis.RedisConfig{
 		Addrs:        a.GetStringSlice(envRedisAddrs), // TODO default?
+		MasterName:   a.GetStringOrDefault(envRedisMasterName, "mymaster"),
 		DB:           a.GetInt(envRedisDb),
 		PoolSize:     a.GetInt(envRedisPoolSize),
 		DialTimeout:  a.GetDuration(envRedisDialTimeout),
@@ -98,6 +103,12 @@ func (a *appConfig) GetRedisConfig() redis.RedisConfig {
 		Username:     a.GetString(envRedisUsername),
 		Password:     a.GetString(envRedisPwd),
 	}
+}
+
+// jwt
+
+func (a *appConfig) GetJWKSURL() string {
+	return getStringOrDefault(a.GetString(envJWKSURL), defaultJWKSURL)
 }
 
 func getStringOrDefault(value string, def string) string {

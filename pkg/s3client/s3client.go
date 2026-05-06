@@ -95,8 +95,10 @@ func NewClient(config config.IConfigWatcher[*Config]) (Client, error) {
 		config: config,
 	}
 
-	if err := client.checkBucket(mClient, config.Get()); err != nil {
-		return nil, err
+	if config.Get().CreateBucket {
+		if err := client.checkBucket(mClient, config.Get()); err != nil {
+			return nil, err
+		}
 	}
 
 	cancelHealthCheck, err := mClient.HealthCheck(defaultHealthCheckDuration)

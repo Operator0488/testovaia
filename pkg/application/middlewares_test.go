@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,8 +56,9 @@ paths:
 `)
 
 func TestNewMiddleware_ValidRequest(t *testing.T) {
-	mw, err := httpValidationMiddleware(context.Background(), minimalSpec)
+	routerList, err := buildRouters(context.Background(), [][]byte{minimalSpec})
 	require.NoError(t, err)
+	mw := httpValidationMiddleware(context.Background(), routerList)
 
 	called := false
 	handler := mw(func(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +77,9 @@ func TestNewMiddleware_ValidRequest(t *testing.T) {
 }
 
 func TestNewMiddleware_MissingRequiredField(t *testing.T) {
-	mw, err := httpValidationMiddleware(context.Background(), minimalSpec)
+	routerList, err := buildRouters(context.Background(), [][]byte{minimalSpec})
 	require.NoError(t, err)
+	mw := httpValidationMiddleware(context.Background(), routerList)
 
 	handler := mw(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -97,8 +100,9 @@ func TestNewMiddleware_MissingRequiredField(t *testing.T) {
 }
 
 func TestNewMiddleware_InfraRoutesPassesThrough(t *testing.T) {
-	mw, err := httpValidationMiddleware(context.Background(), minimalSpec)
+	routerList, err := buildRouters(context.Background(), [][]byte{minimalSpec})
 	require.NoError(t, err)
+	mw := httpValidationMiddleware(context.Background(), routerList)
 
 	testCases := []struct {
 		name       string
@@ -154,14 +158,105 @@ func TestNewMiddleware_InfraRoutesPassesThrough(t *testing.T) {
 	}
 }
 
+func newTestApp() *Application {
+	return &Application{
+		auth:      &authConfig{},
+		rateLimit: &rateLimitConfig{},
+	}
+}
+
+func TestAuthMiddleware_InfraPathsBypassAuthFunc(t *testing.T) {
+	bypassedPaths := []string{
+		"/healthz/live",
+		"/healthz/ready",
+		"/metrics",
+		"/swagger/index.html",
+	}
+
+	for _, path := range bypassedPaths {
+		t.Run(path, func(t *testing.T) {
+			app := newTestApp()
+			called := false
+			app.auth.fn = func(r *http.Request) (*http.Request, error) {
+				called = true
+				return r, nil
+			}
+
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})(rec, req)
+
+			assert.False(t, called, "authFunc не должна вызываться для пути %s", path)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
+}
+
+func TestAuthMiddleware_NilAuthFuncPassesThrough(t *testing.T) {
+	app := newTestApp()
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	called := false
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestAuthMiddleware_Returns401WhenAuthFuncErrors(t *testing.T) {
+	app := newTestApp()
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		return nil, errors.New("invalid token")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAuthMiddleware_EnrichedRequestPassedToHandler(t *testing.T) {
+	app := newTestApp()
+	type ctxKey string
+	const key ctxKey = "claims"
+
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		ctx := context.WithValue(r.Context(), key, "injected-claims")
+		return r.WithContext(ctx), nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/resource", nil)
+	rec := httptest.NewRecorder()
+	var gotValue string
+
+	app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		gotValue, _ = r.Context().Value(key).(string)
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "injected-claims", gotValue)
+}
+
 func TestNewMiddleware_InvalidSpec(t *testing.T) {
-	_, err := httpValidationMiddleware(context.Background(), invalidSpec)
+	_, err := buildRouters(context.Background(), [][]byte{invalidSpec})
 	assert.Error(t, err)
 }
 
 func TestNewMiddleware_BodyRestoredForHandler(t *testing.T) {
-	mw, err := httpValidationMiddleware(context.Background(), minimalSpec)
+	routerList, err := buildRouters(context.Background(), [][]byte{minimalSpec})
 	require.NoError(t, err)
+	mw := httpValidationMiddleware(context.Background(), routerList)
 
 	var receivedBody string
 	handler := mw(func(w http.ResponseWriter, r *http.Request) {
@@ -178,4 +273,86 @@ func TestNewMiddleware_BodyRestoredForHandler(t *testing.T) {
 	handler(rec, req)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, body, receivedBody, "request body must be intact for the downstream handler")
+}
+
+// specWithSecurity — спека с doc-level security:[] и одним защищённым эндпоинтом
+var specWithSecurity = []byte(`
+openapi: "3.0.0"
+info:
+  title: Security Test API
+  version: "1.0.0"
+security: []
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+paths:
+  /public:
+    get:
+      summary: Публичный
+      responses:
+        "200":
+          description: OK
+  /protected:
+    post:
+      summary: Защищённый
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: OK
+`)
+
+func TestAuthMiddleware_OpenAPISecurityRouting(t *testing.T) {
+	routerList, err := buildRouters(context.Background(), [][]byte{specWithSecurity})
+	require.NoError(t, err)
+
+	authCalled := false
+	app := newTestApp()
+	app.openAPIRouters = routerList
+	app.auth.fn = func(r *http.Request) (*http.Request, error) {
+		authCalled = true
+		return r, nil
+	}
+
+	t.Run("публичный эндпоинт пропускается без auth", func(t *testing.T) {
+		authCalled = false
+		req := httptest.NewRequest(http.MethodGet, "/public", nil)
+		rec := httptest.NewRecorder()
+		app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})(rec, req)
+		assert.False(t, authCalled)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("защищённый эндпоинт вызывает auth", func(t *testing.T) {
+		authCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/protected", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})(rec, req)
+		assert.True(t, authCalled)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("неизвестный маршрут считается защищённым", func(t *testing.T) {
+		authCalled = false
+		req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
+		rec := httptest.NewRecorder()
+		app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})(rec, req)
+		assert.True(t, authCalled)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
 }

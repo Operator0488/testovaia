@@ -286,10 +286,10 @@ func TestHealthLoop_PingSuccess(t *testing.T) {
 	c.cli.Store(db)
 
 	// Устанавливаем lastUsed в прошлом чтобы форсировать пинг
-	c.lastActivity.Store(time.Now().Add(-time.Minute).UnixNano())
+	c.lastActivity.Store(time.Now().UTC().Add(-time.Minute).UnixNano())
 
 	// Вызываем health check вручную
-	start := time.Now()
+	start := time.Now().UTC()
 	err := c.universal().Ping(ctx).Err()
 	require.NoError(t, err)
 
@@ -318,7 +318,7 @@ func TestHealthLoop_PingError(t *testing.T) {
 	c.cli.Store(db)
 
 	// Устанавливаем lastUsed в прошлом
-	c.lastActivity.Store(time.Now().Add(-time.Minute).UnixNano())
+	c.lastActivity.Store(time.Now().UTC().Add(-time.Minute).UnixNano())
 
 	// Вызываем health check вручную
 	err := c.universal().Ping(ctx).Err()
@@ -350,7 +350,7 @@ func TestHealthLoop_SkipOnRecentActivity(t *testing.T) {
 	// Это сложно протестировать напрямую, но можно проверить логику
 
 	lastUsed := c.lastUsed()
-	assert.WithinDuration(t, time.Now(), lastUsed, time.Second)
+	assert.WithinDuration(t, time.Now().UTC(), lastUsed, time.Second)
 
 	// Если с момента lastUsed прошло меньше interval, пинг должен быть пропущен
 	timeSinceLastUsed := time.Since(lastUsed)

@@ -59,6 +59,7 @@ func New(ctx context.Context, cfg RedisConfig) (Redis, error) {
 		logger.Error(ctx, "redis client initialization failed",
 			logger.Any("addrs", cfg.Addrs),
 			logger.Int("db", cfg.DB),
+			logger.String("mastername", cfg.MasterName),
 			logger.String("error", err.Error()),
 		)
 		return nil, err
@@ -88,6 +89,7 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 
 	opts := &goRedis.UniversalOptions{
 		Addrs:        cfg.Addrs,
+		MasterName:   cfg.MasterName,
 		DB:           cfg.DB,
 		PoolSize:     cfg.PoolSize,
 		DialTimeout:  cfg.DialTimeout,
@@ -111,6 +113,8 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 
 		return fmt.Errorf("redis ping err, RebilClient: %w", err)
 	}
+	// если пинг прошёл - помечаем healthcheck здоровым
+	c.health.ok.Store(true)
 
 	// сохраняем старые подписки ДО замены клиента
 	c.subsMu.RLock()
@@ -119,7 +123,7 @@ func (c *client) rebildClient(ctx context.Context, cfg RedisConfig) error {
 
 	// переподписываем все активные подписки на НОВОМ клиенте TODO: обработка ошибки
 	if err := c.resubscribeAll(ctx, activeSubscriptions, newcli); err != nil {
-		logger.Error(ctx, "redis resubscribeAll failed on rebild",
+		logger.Error(ctx, "redis resubscribeAll failed on rebuild",
 			logger.Any("addrs", c.cfg.Addrs),
 			logger.Int("db", c.cfg.DB),
 			logger.String("error", err.Error()),
@@ -168,7 +172,7 @@ func (c *client) resubscribeAll(ctx context.Context, subscriptions map[*subscrib
 
 // обновление времени последней успешной активности
 func (c *client) touchActivity() {
-	c.lastActivity.Store(time.Now().UnixNano())
+	c.lastActivity.Store(time.Now().UTC().UnixNano())
 }
 
 func (c *client) collectPoolMetrics() {
