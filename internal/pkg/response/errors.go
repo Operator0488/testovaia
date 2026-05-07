@@ -37,10 +37,10 @@ func (e *clientError) Code() string    { return e.code }
 func (e *clientError) Message() string { return e.message }
 func (e *clientError) Cause() error    { return nil }
 
-func NotFound(resource string) HTTPError {
+func NotFound() HTTPError {
 	return &clientError{
 		code:       "NOT_FOUND",
-		message:    resource + " not found",
+		message:    "resource not found",
 		httpStatus: http.StatusNotFound,
 	}
 }

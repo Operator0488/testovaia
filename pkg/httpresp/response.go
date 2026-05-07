@@ -42,8 +42,8 @@ func Forbidden[T any](message string) Response[T] {
 	return Response[T]{err: response.Forbidden(message)}
 }
 
-func NotFound[T any](resource string) Response[T] {
-	return Response[T]{err: response.NotFound(resource)}
+func NotFound[T any]() Response[T] {
+	return Response[T]{err: response.NotFound()}
 }
 
 func Unauthorized[T any]() Response[T] {
