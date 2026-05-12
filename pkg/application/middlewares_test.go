@@ -10,10 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/response"
+	pkgauth "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/auth"
 )
 
 var invalidSpec = []byte(`not: valid: yaml: [}`)
@@ -355,4 +357,180 @@ func TestAuthMiddleware_OpenAPISecurityRouting(t *testing.T) {
 		assert.True(t, authCalled)
 		assert.Equal(t, http.StatusOK, rec.Code)
 	})
+}
+
+// specWithScopes — спека для тестирования scope-ограничений
+var specWithScopes = []byte(`
+openapi: "3.0.0"
+info:
+  title: Scope Test API
+  version: "1.0.0"
+security: []
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+paths:
+  /public:
+    get:
+      summary: Публичный
+      security: []
+      responses:
+        "200":
+          description: OK
+  /any-token:
+    get:
+      summary: Любой валидный токен, scope не важен
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+  /internal-only:
+    get:
+      summary: Только internal
+      security:
+        - BearerAuth: ["internal"]
+      responses:
+        "200":
+          description: OK
+  /or-scopes:
+    get:
+      summary: Internal ИЛИ external (два отдельных entry)
+      security:
+        - BearerAuth: ["internal"]
+        - BearerAuth: ["external"]
+      responses:
+        "200":
+          description: OK
+  /and-scopes:
+    get:
+      summary: Internal И Supervisor одновременно (AND)
+      security:
+        - BearerAuth: ["internal", "supervisor"]
+      responses:
+        "200":
+          description: OK
+`)
+
+func TestRouteSecurityRequirements(t *testing.T) {
+	routerList, err := buildRouters(context.Background(), [][]byte{specWithScopes})
+	require.NoError(t, err)
+
+	tests := []struct {
+		method       string
+		path         string
+		wantRequired bool
+		wantScopes   [][]string // внешний слайс = OR-требования, внутренний = AND-scopes
+	}{
+		{http.MethodGet, "/public", false, nil},
+		{http.MethodGet, "/any-token", true, [][]string{{}}},
+		{http.MethodGet, "/internal-only", true, [][]string{{"internal"}}},
+		{http.MethodGet, "/or-scopes", true, [][]string{{"internal"}, {"external"}}},
+		{http.MethodGet, "/and-scopes", true, [][]string{{"internal", "supervisor"}}},
+		{http.MethodGet, "/unknown", true, nil}, // fail-secure
+	}
+
+	for _, tc := range tests {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		reqs, required := routeSecurityRequirements(req, routerList)
+
+		assert.Equal(t, tc.wantRequired, required, "path=%s required", tc.path)
+
+		if tc.wantScopes == nil {
+			assert.Empty(t, reqs, "path=%s scopes должны быть пусты", tc.path)
+		} else {
+			require.Len(t, reqs, len(tc.wantScopes), "path=%s кол-во OR-требований", tc.path)
+			for i, wantGroup := range tc.wantScopes {
+				for _, scheme := range reqs[i] {
+					assert.ElementsMatch(t, wantGroup, scheme, "path=%s требование[%d]", tc.path, i)
+				}
+			}
+		}
+	}
+}
+
+func TestScopesSatisfied(t *testing.T) {
+	makeReqs := func(groups ...[]string) openapi3.SecurityRequirements {
+		reqs := make(openapi3.SecurityRequirements, len(groups))
+		for i, g := range groups {
+			reqs[i] = openapi3.SecurityRequirement{"BearerAuth": g}
+		}
+		return reqs
+	}
+
+	tests := []struct {
+		tokenScope pkgauth.Scope
+		reqs       openapi3.SecurityRequirements
+		want       bool
+	}{
+		// пустой список scope = любой валидный токен
+		{pkgauth.ScopeInternal, makeReqs([]string{}), true},
+		{pkgauth.ScopeExternal, makeReqs([]string{}), true},
+
+		// одиночный scope — точное совпадение
+		{pkgauth.ScopeInternal, makeReqs([]string{"internal"}), true},
+		{pkgauth.ScopeExternal, makeReqs([]string{"internal"}), false},
+		{pkgauth.ScopeExternal, makeReqs([]string{"external"}), true},
+		{pkgauth.ScopeInternal, makeReqs([]string{"external"}), false},
+
+		// OR через два entry
+		{pkgauth.ScopeInternal, makeReqs([]string{"internal"}, []string{"external"}), true},
+		{pkgauth.ScopeExternal, makeReqs([]string{"internal"}, []string{"external"}), true},
+
+		// AND: оба scope одновременно — с однозначным Claims.Scope невозможно
+		{pkgauth.ScopeInternal, makeReqs([]string{"internal", "supervisor"}), false},
+		{pkgauth.ScopeExternal, makeReqs([]string{"internal", "supervisor"}), false},
+	}
+
+	for _, tc := range tests {
+		got := scopesSatisfied(tc.tokenScope, tc.reqs)
+		assert.Equal(t, tc.want, got,
+			"tokenScope=%q reqs=%v", tc.tokenScope, tc.reqs,
+		)
+	}
+}
+
+func TestAuthMiddleware_ScopeEnforcement(t *testing.T) {
+	routerList, err := buildRouters(context.Background(), [][]byte{specWithScopes})
+	require.NoError(t, err)
+
+	tests := []struct {
+		path       string
+		tokenScope pkgauth.Scope // пустая строка = нет токена (auth fn вернёт ошибку)
+		wantCode   int
+	}{
+		{"/internal-only", pkgauth.ScopeInternal, http.StatusOK},
+		{"/internal-only", pkgauth.ScopeExternal, http.StatusForbidden},
+		{"/or-scopes", pkgauth.ScopeInternal, http.StatusOK},
+		{"/or-scopes", pkgauth.ScopeExternal, http.StatusOK},
+		{"/and-scopes", pkgauth.ScopeInternal, http.StatusForbidden},
+		{"/and-scopes", pkgauth.ScopeExternal, http.StatusForbidden},
+		{"/any-token", pkgauth.ScopeInternal, http.StatusOK},
+		{"/any-token", pkgauth.ScopeExternal, http.StatusOK},
+		{"/internal-only", "", http.StatusUnauthorized}, // нет токена
+	}
+
+	for _, tc := range tests {
+		app := newTestApp()
+		app.openAPIRouters = routerList
+		app.auth.fn = func(r *http.Request) (*http.Request, error) {
+			if tc.tokenScope == "" {
+				return nil, errors.New("нет токена")
+			}
+			ctx := pkgauth.WithClaims(r.Context(), &pkgauth.Claims{Scope: tc.tokenScope})
+			return r.WithContext(ctx), nil
+		}
+
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		rec := httptest.NewRecorder()
+		app.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})(rec, req)
+
+		assert.Equal(t, tc.wantCode, rec.Code,
+			"path=%s tokenScope=%q", tc.path, tc.tokenScope,
+		)
+	}
 }
