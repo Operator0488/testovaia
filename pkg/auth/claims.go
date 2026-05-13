@@ -10,8 +10,8 @@ import (
 
 // Claims — JWT claims, которые выдаёт identity-service.
 type Claims struct {
-	Subject   string // UUID Identity
-	Scope     Scope  // internal / external
+	Subject   string  // UUID Identity
+	Scopes    []Scope // internal / external
 	Issuer    string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
@@ -19,7 +19,7 @@ type Claims struct {
 
 // jwtClaims — внутренняя структура для парсинга JWT.
 type jwtClaims struct {
-	Scope string `json:"scope"`
+	Scopes []string `json:"scopes"`
 	jwt.RegisteredClaims
 }
 
@@ -47,14 +47,18 @@ func ParseToken(keys KeyStore, tokenString string) (*Claims, error) {
 		return nil, errors.New("некорректные claims токена")
 	}
 
-	scope := Scope(raw.Scope)
-	if !scope.Valid() {
-		return nil, fmt.Errorf("недопустимый scope: %q", raw.Scope)
+	scopes := make([]Scope, 0, len(raw.Scopes))
+	for _, sc := range raw.Scopes {
+		scope := Scope(sc)
+		if !scope.Valid() {
+			return nil, fmt.Errorf("недопустимый scope: %q", sc)
+		}
+		scopes = append(scopes, scope)
 	}
 
 	c := &Claims{
 		Subject: raw.Subject,
-		Scope:   scope,
+		Scopes:  scopes,
 		Issuer:  raw.Issuer,
 	}
 	if raw.IssuedAt != nil {

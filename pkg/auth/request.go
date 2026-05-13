@@ -38,9 +38,10 @@ func IsInScope(r *http.Request, scope Scope) error {
 		return ErrNotAuthenticated
 	}
 
-	if c.Scope != scope {
-		return ErrForbidden
+	for _, s := range c.Scopes {
+		if s == scope {
+			return nil
+		}
 	}
-
-	return nil
+	return ErrForbidden
 }

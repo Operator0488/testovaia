@@ -13,7 +13,7 @@ import (
 func TestClaimsFromContext_ReturnsClaims(t *testing.T) {
 	claims := &auth.Claims{
 		Subject:   "user-uuid-123",
-		Scope:     auth.ScopeExternal,
+		Scopes:    []auth.Scope{auth.ScopeExternal},
 		Issuer:    "identity-service",
 		IssuedAt:  time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Hour),

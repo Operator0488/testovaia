@@ -285,7 +285,7 @@ func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		if hasScopes(secReqs) {
 			claims := pkgauth.ClaimsFromContext(newReq.Context())
-			if claims == nil || !scopesSatisfied(claims.Scope, secReqs) {
+			if claims == nil || !scopesSatisfied(claims.Scopes, secReqs) {
 				response.WriteError(ctx, w, r, response.Forbidden("недостаточно прав доступа"))
 
 				return
@@ -344,9 +344,9 @@ func hasScopes(reqs openapi3.SecurityRequirements) bool {
 // scopesSatisfied проверяет, удовлетворяет ли scope токена хотя бы одному требованию из списка.
 // SecurityRequirements (массив) — OR: достаточно выполнить хотя бы одно требование.
 // Внутри SecurityRequirement — AND: токен обязан иметь все scopes из каждой схемы.
-func scopesSatisfied(tokenScope pkgauth.Scope, reqs openapi3.SecurityRequirements) bool {
+func scopesSatisfied(tokenScopes []pkgauth.Scope, reqs openapi3.SecurityRequirements) bool {
 	for _, req := range reqs {
-		if requirementSatisfied(tokenScope, req) {
+		if requirementSatisfied(tokenScopes, req) {
 			return true
 		}
 	}
@@ -354,11 +354,18 @@ func scopesSatisfied(tokenScope pkgauth.Scope, reqs openapi3.SecurityRequirement
 	return false
 }
 
-// requirementSatisfied проверяет, что tokenScope удовлетворяет всем scopes в требовании (AND-семантика).
-func requirementSatisfied(tokenScope pkgauth.Scope, req openapi3.SecurityRequirement) bool {
-	for _, scopes := range req {
-		for _, s := range scopes {
-			if pkgauth.Scope(s) != tokenScope {
+// requirementSatisfied проверяет, что все scopes из требовании пристутствуют в предъявленом токене (AND-семантика).
+func requirementSatisfied(tokenScopes []pkgauth.Scope, req openapi3.SecurityRequirement) bool {
+	for _, reqScopes := range req {
+		for _, reqScope := range reqScopes {
+			reqScopeFound := false
+			for _, tokenScope := range tokenScopes {
+				if pkgauth.Scope(reqScope) == tokenScope {
+					reqScopeFound = true
+					break
+				}
+			}
+			if !reqScopeFound {
 				return false
 			}
 		}

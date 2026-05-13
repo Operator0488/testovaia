@@ -461,33 +461,38 @@ func TestScopesSatisfied(t *testing.T) {
 	}
 
 	tests := []struct {
-		tokenScope pkgauth.Scope
-		reqs       openapi3.SecurityRequirements
-		want       bool
+		tokenScopes []pkgauth.Scope
+		reqs        openapi3.SecurityRequirements
+		want        bool
 	}{
 		// пустой список scope = любой валидный токен
-		{pkgauth.ScopeInternal, makeReqs([]string{}), true},
-		{pkgauth.ScopeExternal, makeReqs([]string{}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal}, makeReqs([]string{}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeExternal}, makeReqs([]string{}), true},
 
 		// одиночный scope — точное совпадение
-		{pkgauth.ScopeInternal, makeReqs([]string{"internal"}), true},
-		{pkgauth.ScopeExternal, makeReqs([]string{"internal"}), false},
-		{pkgauth.ScopeExternal, makeReqs([]string{"external"}), true},
-		{pkgauth.ScopeInternal, makeReqs([]string{"external"}), false},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal}, makeReqs([]string{"internal"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeExternal}, makeReqs([]string{"internal"}), false},
+		{[]pkgauth.Scope{pkgauth.ScopeExternal}, makeReqs([]string{"external"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal}, makeReqs([]string{"external"}), false},
 
 		// OR через два entry
-		{pkgauth.ScopeInternal, makeReqs([]string{"internal"}, []string{"external"}), true},
-		{pkgauth.ScopeExternal, makeReqs([]string{"internal"}, []string{"external"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal}, makeReqs([]string{"internal"}, []string{"external"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeExternal}, makeReqs([]string{"internal"}, []string{"external"}), true},
 
-		// AND: оба scope одновременно — с однозначным Claims.Scope невозможно
-		{pkgauth.ScopeInternal, makeReqs([]string{"internal", "supervisor"}), false},
-		{pkgauth.ScopeExternal, makeReqs([]string{"internal", "supervisor"}), false},
+		// AND: оба scope одновременно — токен с одним scope не проходит
+		{[]pkgauth.Scope{pkgauth.ScopeInternal}, makeReqs([]string{"internal", "supervisor"}), false},
+		{[]pkgauth.Scope{pkgauth.ScopeExternal}, makeReqs([]string{"internal", "supervisor"}), false},
+
+		// AND: токен с несколькими scopes — проходит если есть все требуемые
+		{[]pkgauth.Scope{pkgauth.ScopeInternal, "supervisor"}, makeReqs([]string{"internal", "supervisor"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal, "supervisor"}, makeReqs([]string{"internal"}), true},
+		{[]pkgauth.Scope{pkgauth.ScopeInternal, "supervisor"}, makeReqs([]string{"external"}), false},
 	}
 
 	for _, tc := range tests {
-		got := scopesSatisfied(tc.tokenScope, tc.reqs)
+		got := scopesSatisfied(tc.tokenScopes, tc.reqs)
 		assert.Equal(t, tc.want, got,
-			"tokenScope=%q reqs=%v", tc.tokenScope, tc.reqs,
+			"tokenScopes=%q reqs=%v", tc.tokenScopes, tc.reqs,
 		)
 	}
 }
@@ -519,7 +524,7 @@ func TestAuthMiddleware_ScopeEnforcement(t *testing.T) {
 			if tc.tokenScope == "" {
 				return nil, errors.New("нет токена")
 			}
-			ctx := pkgauth.WithClaims(r.Context(), &pkgauth.Claims{Scope: tc.tokenScope})
+			ctx := pkgauth.WithClaims(r.Context(), &pkgauth.Claims{Scopes: []pkgauth.Scope{tc.tokenScope}})
 			return r.WithContext(ctx), nil
 		}
 
