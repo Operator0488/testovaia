@@ -50,6 +50,14 @@ func Unauthorized[T any]() Response[T] {
 	return Response[T]{err: response.Unauthorized()}
 }
 
+func Locked[T any](message string) Response[T] {
+	return Response[T]{err: response.Locked(message)}
+}
+
+func UnprocessableEntity[T any](message string) Response[T] {
+	return Response[T]{err: response.UnprocessableEntity(message)}
+}
+
 func Internal[T any](cause error) Response[T] {
 	return Response[T]{err: response.Internal(cause)}
 }
