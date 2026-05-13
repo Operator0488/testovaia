@@ -77,6 +77,22 @@ func Unauthorized() HTTPError {
 	}
 }
 
+func Locked(message string) HTTPError {
+	return &clientError{
+		code:       "LOCKED",
+		message:    message,
+		httpStatus: http.StatusLocked,
+	}
+}
+
+func UnprocessableEntity(message string) HTTPError {
+	return &clientError{
+		code:       "UNPROCESSABLE_ENTITY",
+		message:    message,
+		httpStatus: http.StatusUnprocessableEntity,
+	}
+}
+
 type serverError struct {
 	code       string
 	message    string
