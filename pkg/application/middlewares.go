@@ -25,6 +25,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
+	pkgauth "easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/auth"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/metrics"
 )
@@ -242,6 +243,7 @@ type authConfig struct {
 //  1. Пропускает запросы к служебным путям без проверки (/healthz/*, /metrics, /swagger*)
 //  2. Если маршрут найден в OpenAPI-спецификации и не требует auth (security: []) — пропускает
 //  3. Если функция аутентификации не настроена (fn == nil) — предупреждение и пропуск
+//  4. После успешной аутентификации проверяет scope токена по требованиям из спецификации
 func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.IsInfraPath(r.URL.Path) {
@@ -250,7 +252,8 @@ func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if !routeRequiresAuth(r, a.openAPIRouters) {
+		secReqs, authRequired := routeSecurityRequirements(r, a.openAPIRouters)
+		if !authRequired {
 			next(w, r)
 
 			return
@@ -280,13 +283,24 @@ func (a *Application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if hasScopes(secReqs) {
+			claims := pkgauth.ClaimsFromContext(newReq.Context())
+			if claims == nil || !scopesSatisfied(claims.Scopes, secReqs) {
+				response.WriteError(ctx, w, r, response.Forbidden("недостаточно прав доступа"))
+
+				return
+			}
+		}
+
 		next(w, newReq)
 	}
 }
 
-// routeRequiresAuth возвращает true, если найденный в спецификации маршрут требует аутентификации.
-// Если маршрут не найден ни в одной спецификации — считается защищённым (fail-secure).
-func routeRequiresAuth(r *http.Request, routerList []routers.Router) bool {
+// routeSecurityRequirements возвращает требования безопасности для маршрута и флаг необходимости аутентификации.
+// Возвращает (nil, false) для публичных маршрутов, (reqs, true) — если аутентификация нужна.
+// Если маршрут не найден ни в одной спецификации — fail-secure: (nil, true).
+// Operation-level security переопределяет doc-level security.
+func routeSecurityRequirements(r *http.Request, routerList []routers.Router) (openapi3.SecurityRequirements, bool) {
 	for _, router := range routerList {
 		route, _, err := router.FindRoute(r)
 		if err != nil {
@@ -295,14 +309,68 @@ func routeRequiresAuth(r *http.Request, routerList []routers.Router) bool {
 
 		// operation-level security переопределяет doc-level
 		if route.Operation.Security != nil {
-			return len(*route.Operation.Security) > 0
+			if len(*route.Operation.Security) == 0 {
+				return nil, false
+			}
+
+			return *route.Operation.Security, true
 		}
 
 		// fallback на doc-level security
-		return len(route.Spec.Security) > 0
+		if len(route.Spec.Security) == 0 {
+			return nil, false
+		}
+
+		return route.Spec.Security, true
 	}
 
 	// маршрут не описан в спеке — считаем защищённым
+	return nil, true
+}
+
+// hasScopes возвращает true, если хотя бы одно требование содержит непустой список scopes.
+func hasScopes(reqs openapi3.SecurityRequirements) bool {
+	for _, req := range reqs {
+		for _, scopes := range req {
+			if len(scopes) > 0 {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// scopesSatisfied проверяет, удовлетворяет ли scope токена хотя бы одному требованию из списка.
+// SecurityRequirements (массив) — OR: достаточно выполнить хотя бы одно требование.
+// Внутри SecurityRequirement — AND: токен обязан иметь все scopes из каждой схемы.
+func scopesSatisfied(tokenScopes []pkgauth.Scope, reqs openapi3.SecurityRequirements) bool {
+	for _, req := range reqs {
+		if requirementSatisfied(tokenScopes, req) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// requirementSatisfied проверяет, что все scopes из требовании пристутствуют в предъявленом токене (AND-семантика).
+func requirementSatisfied(tokenScopes []pkgauth.Scope, req openapi3.SecurityRequirement) bool {
+	for _, reqScopes := range req {
+		for _, reqScope := range reqScopes {
+			reqScopeFound := false
+			for _, tokenScope := range tokenScopes {
+				if pkgauth.Scope(reqScope) == tokenScope {
+					reqScopeFound = true
+					break
+				}
+			}
+			if !reqScopeFound {
+				return false
+			}
+		}
+	}
+
 	return true
 }
 

@@ -38,11 +38,11 @@ func TestJWTAuthFunc_ValidToken(t *testing.T) {
 	fn := jwtAuthFunc(keyStore)
 
 	tokenStr := signToken(t, privKey, "kid-1", jwt.MapClaims{
-		"sub":   "user-uuid-42",
-		"scope": "external",
-		"iss":   "identity-service",
-		"iat":   time.Now().UTC().Unix(),
-		"exp":   time.Now().UTC().Add(time.Hour).Unix(),
+		"sub":    "user-uuid-42",
+		"scopes": []auth.Scope{"external"},
+		"iss":    "identity-service",
+		"iat":    time.Now().UTC().Unix(),
+		"exp":    time.Now().UTC().Add(time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
@@ -54,7 +54,7 @@ func TestJWTAuthFunc_ValidToken(t *testing.T) {
 	claims := auth.ClaimsFromContext(newReq.Context())
 	require.NotNil(t, claims)
 	assert.Equal(t, "user-uuid-42", claims.Subject)
-	assert.Equal(t, auth.ScopeExternal, claims.Scope)
+	assert.Equal(t, []auth.Scope{auth.ScopeExternal}, claims.Scopes)
 }
 
 func TestJWTAuthFunc_MissingAuthorizationHeader(t *testing.T) {
@@ -85,11 +85,11 @@ func TestJWTAuthFunc_ExpiredToken(t *testing.T) {
 	fn := jwtAuthFunc(keyStore)
 
 	tokenStr := signToken(t, privKey, "kid-1", jwt.MapClaims{
-		"sub":   "user-uuid-42",
-		"scope": "external",
-		"iss":   "identity-service",
-		"iat":   time.Now().UTC().Add(-2 * time.Hour).Unix(),
-		"exp":   time.Now().UTC().Add(-time.Hour).Unix(),
+		"sub":    "user-uuid-42",
+		"scopes": []auth.Scope{"external"},
+		"iss":    "identity-service",
+		"iat":    time.Now().UTC().Add(-2 * time.Hour).Unix(),
+		"exp":    time.Now().UTC().Add(-time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
@@ -106,9 +106,9 @@ func TestJWTAuthFunc_UnknownKid(t *testing.T) {
 
 	otherKey := generateTestKey(t)
 	tokenStr := signToken(t, otherKey, "unknown-kid", jwt.MapClaims{
-		"sub":   "user",
-		"scope": "external",
-		"exp":   time.Now().UTC().Add(time.Hour).Unix(),
+		"sub":    "user",
+		"scopes": []auth.Scope{"external"},
+		"exp":    time.Now().UTC().Add(time.Hour).Unix(),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
