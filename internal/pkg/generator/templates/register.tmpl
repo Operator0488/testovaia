@@ -11,7 +11,7 @@ import (
 
 // Register регистрирует все HTTP-обработчики на mux.
 func Register(ctx context.Context, mux *http.ServeMux) {
-	h := di.Register(ctx, &{{.HandlerName}}{})
+	h := di.Register(ctx, &handler{})
 	HandlerWithOptions(h, StdHTTPServerOptions{
 		BaseRouter:       mux,
 		ErrorHandlerFunc: httpresp.JSONErrorHandler,
