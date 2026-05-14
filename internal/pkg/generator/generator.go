@@ -9,16 +9,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"unicode"
 )
 
 const permRule = 0o755
 
 type Generator struct {
-	config      Config
-	handlerName string
-	methods     []string
-	modulePath  string
+	config     Config
+	methods    []string
+	modulePath string
 }
 
 func RunSingle(cfg Config) error {
@@ -101,10 +99,9 @@ func newGenerator(cfg Config) (*Generator, error) {
 	}
 
 	return &Generator{
-		config:      cfg,
-		handlerName: deriveHandlerName(cfg.SpecPath),
-		methods:     methods,
-		modulePath:  modulePath,
+		config:     cfg,
+		methods:    methods,
+		modulePath: modulePath,
 	}, nil
 }
 
@@ -113,18 +110,18 @@ func (g *Generator) generate() error {
 	genImportPath := g.modulePath + "/" + g.config.GenPackage
 	pkgName := filepath.Base(g.config.GenPackage)
 
-	if err := generateHandlerFile(genPath, pkgName, g.handlerName, genImportPath, g.methods); err != nil {
+	if err := generateHandlerFile(genPath, pkgName, genImportPath, g.methods); err != nil {
 		return fmt.Errorf("failed to generate handler: %w", err)
 	}
 
-	if err := generateRegisterFile(genPath, pkgName, g.handlerName, genImportPath); err != nil {
+	if err := generateRegisterFile(genPath, pkgName, genImportPath); err != nil {
 		return fmt.Errorf("failed to generate register: %w", err)
 	}
 
 	return nil
 }
 
-func deriveBaseName(spec string) string {
+func derivePackageName(spec string) string {
 	base := filepath.Base(spec)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
 
@@ -139,22 +136,6 @@ func deriveBaseName(spec string) string {
 	}
 
 	return string(runes)
-}
-
-func derivePackageName(spec string) string {
-	return deriveBaseName(spec)
-}
-
-func deriveHandlerName(specPath string) string {
-	name := deriveBaseName(specPath)
-	if name == "" {
-		return "Handler"
-	}
-
-	runes := []rune(name)
-	runes[0] = unicode.ToUpper(runes[0])
-
-	return string(runes) + "Handler"
 }
 
 // parseServerInterface парсит сгенерированный файл и извлекает имена методов

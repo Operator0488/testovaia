@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-func generateRegisterFile(dir, pkg, handlerName string, genImport string) error {
+func generateRegisterFile(dir, pkg, genImport string) error {
 	registerPath := filepath.Join(dir, "register.gen.go")
 
 	if err := os.MkdirAll(dir, permRule); err != nil {
@@ -22,8 +22,7 @@ func generateRegisterFile(dir, pkg, handlerName string, genImport string) error 
 	fmt.Printf("CREATE: %s\n", registerPath)
 
 	return registerTmpl.Execute(f, map[string]interface{}{
-		"Package":     pkg,
-		"HandlerName": handlerName,
-		"GenImport":   genImport,
+		"Package":   pkg,
+		"GenImport": genImport,
 	})
 }

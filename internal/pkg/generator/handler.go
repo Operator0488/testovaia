@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-func generateHandlerFile(dir, pkg, handlerName, genImport string, methods []string) error {
+func generateHandlerFile(dir, pkg, genImport string, methods []string) error {
 	handlerPath := filepath.Join(dir, "handler.gen.go")
 
 	if err := os.MkdirAll(dir, permRule); err != nil {
@@ -19,12 +19,11 @@ func generateHandlerFile(dir, pkg, handlerName, genImport string, methods []stri
 	}
 	defer f.Close()
 
-	fmt.Printf("CREATE: %s (handler: %s)\n", handlerPath, handlerName)
+	fmt.Printf("CREATE: %s handler\n", handlerPath)
 
 	return handlerTmpl.Execute(f, map[string]interface{}{
-		"Package":     pkg,
-		"HandlerName": handlerName,
-		"Methods":     methods,
-		"GenImport":   genImport,
+		"Package":   pkg,
+		"Methods":   methods,
+		"GenImport": genImport,
 	})
 }
