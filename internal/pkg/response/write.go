@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/pkg/logger"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // WriteError — пишет ошибку в ответ клиенту и логирует ее (если необходимо)
@@ -46,13 +48,27 @@ func writeError(ctx context.Context, w http.ResponseWriter, method, path string,
 		)
 	}
 
+	errPart := &ErrorPart{
+		TraceID: traceIDFromContext(ctx),
+		Message: httpErr.Message(),
+	}
+
+	var valErr *validationError
+	if errors.As(httpErr, &valErr) {
+		errPart.Detail = valErr.Details()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpErr.HTTPStatus())
-
 	_ = json.NewEncoder(w).Encode(Envelope{
-		Error: &ErrorPart{
-			TraceID: traceIDFromContext(ctx),
-			Message: httpErr.Message(),
-		},
+		Error: errPart,
 	})
+}
+
+func traceIDFromContext(ctx context.Context) string {
+	if sc := trace.SpanFromContext(ctx).SpanContext(); sc.HasTraceID() {
+		return sc.TraceID().String()
+	}
+
+	return uuid.New().String()
 }
