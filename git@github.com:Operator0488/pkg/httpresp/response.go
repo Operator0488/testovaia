@@ -54,8 +54,8 @@ func Locked[T any](message string) Response[T] {
 	return Response[T]{err: response.Locked(message)}
 }
 
-func UnprocessableEntity[T any](message string) Response[T] {
-	return Response[T]{err: response.UnprocessableEntity(message)}
+func UnprocessableEntity[T any](fieldErrors map[string][]string) Response[T] {
+	return Response[T]{err: response.UnprocessableEntity(fieldErrors)}
 }
 
 func Internal[T any](cause error) Response[T] {
