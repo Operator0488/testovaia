@@ -7,6 +7,8 @@ import (
 	"easybnk.gitlab.yandexcloud.net/backend/platform-core/internal/pkg/response"
 )
 
+const resourceNotFoundMsg = "resource not found"
+
 // Response — универсальный результат обработки до записи в HTTP.
 type Response[T any] struct {
 	data       T
@@ -42,8 +44,13 @@ func Forbidden[T any](message string) Response[T] {
 	return Response[T]{err: response.Forbidden(message)}
 }
 
-func NotFound[T any]() Response[T] {
-	return Response[T]{err: response.NotFound()}
+func NotFound[T any](optMsg ...string) Response[T] {
+	msg := resourceNotFoundMsg
+	if len(optMsg) > 0 {
+		msg = optMsg[0]
+	}
+
+	return Response[T]{err: response.NotFound(msg)}
 }
 
 func Unauthorized[T any]() Response[T] {
